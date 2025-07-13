@@ -16,6 +16,13 @@ services:
       - PYTHONPATH=/app
     command: python app/main.py
 
+  # ini ntrr kamu setup aja sesuaiin sama kebutuhan
+  # frontend:
+  #   build: ./frontend
+  # ports:
+  #     - "xxxx:xxxx"
+
+
   db:
     image: postgres:14
     environment:
@@ -33,7 +40,7 @@ services:
       - "80:80"
     depends_on:
       - backend
-    # - frontend
+    # - frontend -> ini nanti tinggal di uncomment aja
   
   prometheus:
     image: prom/prometheus

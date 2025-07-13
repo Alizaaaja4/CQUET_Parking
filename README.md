@@ -1,4 +1,61 @@
-# Testing Flow
+# Requirements
+- [Docker](https://www.docker.com/products/docker-desktop/)
+- [Docker Compose](https://docs.docker.com/compose/)
+- [DBeaver](https://dbeaver.io/) 
+- [Python](https://www.python.org/) 
+- [Node.js](https://nodejs.org/en/download)
+- [Postman](https://www.postman.com/) 
+
+## Instalasi & Setup
+1. **Clone the Repository**
+    - bebas git clone aja dimana aja wkwkwk, nanti copas FE kamu
+        ```sh
+        git clone https://github.com/Alizaaaja4/CQUET_Parking.git
+        cd CQUET_Parking
+        ```
+
+2. **Set Up Backend**
+   - Navigate to the `backend` folder:
+     ```sh
+     cd backend
+     ```
+   - Create a virtual environment and activate it:
+     ```sh
+     python -m venv venv
+     source venv/bin/activate  # On Windows: venv\Scripts\activate
+     ```
+   - Install dependencies:
+     ```sh
+     pip install -r requirements.txt
+     ```
+
+3. **Build and Run Using Docker Compose**
+    - Navigate back to the root directory:
+        ```sh
+        cd ..
+        ```
+   - Build and start the services:
+     ```sh
+     docker compose up --build -d
+     ```
+    - Cek Semua Container Berjalan
+        ```sh
+        docker compose ps
+        ```
+   - Cek Log Backend (Debugging)
+     ```sh
+     docker compose logs -f backend
+     ```
+    - Migrasi Dummy Data ke DBeaver
+        ```sh
+        docker compose exec backend bash
+        python init_db.py
+        ```
+
+
+## API Endpoints
+[Dokumentasi ERD](https://dbdiagram.io/d/687261dbf413ba35088c192d) & [Dokumentasi API](https://martian-firefly-918270.postman.co/workspace/My-Workspace~fcfe7932-4ced-470f-8370-32b656cbeaf9/collection/32756734-e6d5c3b1-4dcf-4835-abb6-336fc0fd2742?action=share&creator=32756734) 
+### Testing Flow
 
 | Step               | Endpoint / Action              | Keterangan                    |
 | ------------------ | ------------------------------ | ----------------------------- |
@@ -15,7 +72,7 @@
 | Admin Monitoring 3 | GET `/api/payments/active`     | View active sessions          |
 
 
-# Database Schema Notes
+### Database Schema Notes
 
 | Table    | Fields                                                                                                                          |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
