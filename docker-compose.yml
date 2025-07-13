@@ -9,6 +9,12 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    volumes:
+      - ./backend:/app
+    environment:
+      - FLASK_ENV=development
+      - PYTHONPATH=/app
+    command: python app/main.py
 
   db:
     image: postgres:14
@@ -18,6 +24,8 @@ services:
       POSTGRES_DB: parking
     volumes:
       - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
   nginx:
     build: ./nginx
@@ -25,7 +33,7 @@ services:
       - "80:80"
     depends_on:
       - backend
-      # - frontend
+    # - frontend
 
 volumes:
   db_data:
