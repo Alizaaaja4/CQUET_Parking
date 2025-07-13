@@ -6,6 +6,7 @@ from flask_jwt_extended import JWTManager
 from app.config import Config
 from app.db.models import db
 from app.api.endpoints import payment, slot, user
+from prometheus_flask_exporter import PrometheusMetrics
 
 def create_app():
     app = Flask(__name__)
@@ -16,6 +17,9 @@ def create_app():
     db.init_app(app)
     migrate = Migrate(app, db)
     jwt = JWTManager(app)
+
+    metrics = PrometheusMetrics(app)
+    metrics.info('parking_app_info', 'Parking Application Info', version='1.0.0')
     
     # Register blueprints
     app.register_blueprint(payment.bp, url_prefix='/api/payments')
@@ -29,6 +33,7 @@ def create_app():
     @app.route("/api/health")
     def api_health():
         return {"status": "ok", "service": "parking-api"}
+    
     
     return app
 

@@ -14,14 +14,8 @@ services:
     environment:
       - FLASK_ENV=development
       - PYTHONPATH=/app
+      - DEBUG_METRICS=1
     command: python app/main.py
-
-  # ini ntrr kamu setup aja sesuaiin sama kebutuhan
-  # frontend:
-  #   build: ./frontend
-  # ports:
-  #     - "xxxx:xxxx"
-
 
   db:
     image: postgres:14
@@ -40,14 +34,17 @@ services:
       - "80:80"
     depends_on:
       - backend
-    # - frontend -> ini nanti tinggal di uncomment aja
-  
+      # - frontend -> ini nanti tinggal di uncomment aja
+
   prometheus:
     image: prom/prometheus
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on: # Tambahkan ini agar Prometheus menunggu backend & node-exporter
+      - backend
+      - node-exporter # Tambahkan ini
 
   grafana:
     image: grafana/grafana
@@ -55,6 +52,23 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+    depends_on: # Tambahkan ini agar Grafana menunggu Prometheus
+      - prometheus
+
+  # --- TAMBAHKAN SERVICE NODE EXPORTER INI ---
+  node-exporter:
+    image: prom/node-exporter
+    # HAPUS network_mode: "host"
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude="^/(sys|proc|dev|host|etc)($$|/)"'
 
 volumes:
   db_data:

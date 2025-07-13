@@ -3,5 +3,10 @@ global:
 
 scrape_configs:
   - job_name: 'backend'
+    metrics_path: /metrics # <<< TAMBAHKAN BARIS INI
     static_configs:
       - targets: ['backend:8000']
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
