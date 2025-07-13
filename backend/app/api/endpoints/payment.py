@@ -5,9 +5,14 @@ from datetime import datetime, timedelta
 import qrcode
 import io
 import base64
+import requests
+import uuid
+import os
 from sqlalchemy import func
 
 bp = Blueprint('payment', __name__)
+
+MIDTRANS_SERVER_KEY = os.getenv("MIDTRANS_SERVER_KEY")
 
 @bp.route('/entry', methods=['POST'])
 def create_entry():
@@ -53,9 +58,30 @@ def create_entry():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+def create_qris_payment(amount, order_id):
+    url = "https://api.sandbox.midtrans.com/v2/charge"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "payment_type": "qris",
+        "transaction_details": {
+            "order_id": order_id,
+            "gross_amount": int(amount)
+        }
+    }
+    response = requests.post(
+        url,
+        json=payload,
+        auth=(MIDTRANS_SERVER_KEY, "")
+    )
+    return response.json()
+
+
 @bp.route('/exit', methods=['POST'])
 def process_exit():
-    """Process parking exit and generate QR payment"""
+    """Process parking exit and generate QRIS payment (Midtrans)"""
     try:
         data = request.get_json()
         vehicle_plate = data.get('vehicle_plate')
@@ -77,34 +103,23 @@ def process_exit():
         payment.duration = payment.exit_time - payment.entry_time
         payment.amount = payment.calculate_amount()
         
-        # Generate QR code for payment
-        qr_data = {
-            'payment_id': payment.payment_id,
-            'amount': float(payment.amount),
-            'vehicle_plate': payment.vehicle_plate,
-            'description': f"Parking fee for {payment.vehicle_plate}"
-        }
-        
-        # Create QR code
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(str(qr_data))
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to base64 for API response
-        buffer = io.BytesIO()
-        img.save(buffer, format='PNG')
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        
-        payment.qr_code = img_str
+        # ==== MIDTRANS QRIS ==== #
+        order_id = str(uuid.uuid4())
+        payment.payment_id = order_id  # simpan order id agar bisa dilacak konfirmasi
+        midtrans_resp = create_qris_payment(payment.amount, order_id)
+        qr_url = ""
+        for action in midtrans_resp.get("actions", []):
+            if action.get("name") == "generate-qr-code":
+                qr_url = action.get("url")
+                break
+        payment.qr_code = qr_url
         
         db.session.commit()
         
         return jsonify({
             'message': 'Exit processed successfully',
             'payment': payment.to_dict(),
-            'qr_code': img_str,
+            'qris_url': qr_url,
             'payment_info': {
                 'amount': float(payment.amount),
                 'duration': str(payment.duration),
