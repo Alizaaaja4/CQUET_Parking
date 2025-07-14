@@ -126,13 +126,13 @@ def release_slot():
 @bp.route('/', methods=['GET'])
 @jwt_required()
 def get_all_slots():
-    """Get all slots - Admin only"""
+    """Get all slots - Admin & Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin & Operator access required'}), 403
         
         slots = Slot.query.all()
         
@@ -156,13 +156,13 @@ def get_all_slots():
 @bp.route('/', methods=['POST'])
 @jwt_required()
 def create_slot():
-    """Create new slot - Admin only"""
+    """Create new slot - Admin & Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin & Operator access required'}), 403
         
         data = request.get_json()
         slot_id = data.get('slot_id')
@@ -198,13 +198,13 @@ def create_slot():
 @bp.route('/<int:slot_id>', methods=['PUT'])
 @jwt_required()
 def update_slot(slot_id):
-    """Update slot - Admin only"""
+    """Update slot - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin & Operator access required'}), 403
         
         slot = Slot.query.get(slot_id)
         if not slot:
@@ -235,13 +235,13 @@ def update_slot(slot_id):
 @bp.route('/<int:slot_id>', methods=['DELETE'])
 @jwt_required()
 def delete_slot(slot_id):
-    """Delete slot - Admin only"""
+    """Delete slot - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin & Operator access required'}), 403
         
         slot = Slot.query.get(slot_id)
         if not slot:

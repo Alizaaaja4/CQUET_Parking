@@ -100,8 +100,8 @@ def get_users():
         current_user = User.query.get(current_user_id)
         
         # Only admin can view all users
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin & Operator access required'}), 403
         
         users = User.query.all()
         return jsonify({

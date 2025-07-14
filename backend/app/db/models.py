@@ -12,7 +12,7 @@ class User(db.Model):
     username = db.Column(db.String(80), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(120), nullable=False, unique=True)
-    role = db.Column(db.String(50), nullable=False, default='user')  # user, admin
+    role = db.Column(db.String(50), nullable=False, default='user')  # user, admin, operator
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

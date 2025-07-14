@@ -30,6 +30,18 @@ def init_database():
             admin_user.set_password('admin123')
             db.session.add(admin_user)
             print("Created default admin user: admin/admin123")
+        
+        # Create default operator user
+        operator_user = User.query.filter_by(username='operator').first()
+        if not operator_user:
+            operator_user = User(
+                username='operator',
+                email='operator@parking.com',
+                role='operator'
+            )
+            operator_user.set_password('operator123')
+            db.session.add(operator_user)
+            print("Created default operator user: operator/operator123")
 
         # Create sample parking slots
         level_zone_slots = {
@@ -38,21 +50,21 @@ def init_database():
             'L3': {'C': 30}
         }
 
-    for level, zones in level_zone_slots.items():
-        for zone, num_slots in zones.items():
-            for slot_num in range(1, num_slots + 1):
-                slot_id = f"{level}{zone}{slot_num:02d}"
-                existing_slot = Slot.query.filter_by(slot_id=slot_id).first()
-                if not existing_slot:
-                    slot = Slot(
-                        slot_id=slot_id,
-                        level=level,
-                        zone=zone,
-                        status=True  
-                    )
-                    db.session.add(slot)
-        
-        db.session.commit()
+        for level, zones in level_zone_slots.items():
+            for zone, num_slots in zones.items():
+                for slot_num in range(1, num_slots + 1):
+                    slot_id = f"{level}{zone}{slot_num:02d}"
+                    existing_slot = Slot.query.filter_by(slot_id=slot_id).first()
+                    if not existing_slot:
+                        slot = Slot(
+                            slot_id=slot_id,
+                            level=level,
+                            zone=zone,
+                            status=True  
+                        )
+                        db.session.add(slot)
+            
+            db.session.commit()
 
 if __name__ == '__main__':
     init_database()
