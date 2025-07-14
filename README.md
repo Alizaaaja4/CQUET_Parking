@@ -28,7 +28,7 @@
      ```sh
      pip install -r requirements.txt
      ```
-
+  
 3. **Build and Run Using Docker Compose**
     - Navigate back to the root directory:
         ```sh

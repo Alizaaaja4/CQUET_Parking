@@ -30,30 +30,29 @@ def init_database():
             admin_user.set_password('admin123')
             db.session.add(admin_user)
             print("Created default admin user: admin/admin123")
-        
+
         # Create sample parking slots
-        levels = ['L1', 'L2', 'L3']
-        zones = ['A', 'B', 'C']
-        
-        for level in levels:
-            for zone in zones:
-                for slot_num in range(1, 11):  # 10 slots per zone
-                    slot_id = f"{level}{zone}{slot_num:02d}"
-                    
-                    existing_slot = Slot.query.filter_by(slot_id=slot_id).first()
-                    if not existing_slot:
-                        slot = Slot(
-                            slot_id=slot_id,
-                            level=level,
-                            zone=zone,
-                            status=True  # Available
-                        )
-                        db.session.add(slot)
+        level_zone_slots = {
+            'L1': {'A': 10},
+            'L2': {'B': 20},
+            'L3': {'C': 30}
+        }
+
+    for level, zones in level_zone_slots.items():
+        for zone, num_slots in zones.items():
+            for slot_num in range(1, num_slots + 1):
+                slot_id = f"{level}{zone}{slot_num:02d}"
+                existing_slot = Slot.query.filter_by(slot_id=slot_id).first()
+                if not existing_slot:
+                    slot = Slot(
+                        slot_id=slot_id,
+                        level=level,
+                        zone=zone,
+                        status=True  
+                    )
+                    db.session.add(slot)
         
         db.session.commit()
-        print("Database initialized successfully!")
-        print("Created sample parking slots (L1-L3, Zones A-C, 10 slots each)")
-        print("Total slots created: 120")
 
 if __name__ == '__main__':
     init_database()
