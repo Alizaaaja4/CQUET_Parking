@@ -171,13 +171,13 @@ def confirm_payment():
 @bp.route('/history', methods=['GET'])
 @jwt_required()
 def get_payment_history():
-    """Get payment history - Admin only"""
+    """Get payment history - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin Operator access required'}), 403
         
         # Get query parameters
         page = request.args.get('page', 1, type=int)
@@ -230,13 +230,13 @@ def get_payment_history():
 @bp.route('/statistics', methods=['GET'])
 @jwt_required()
 def get_statistics():
-    """Get payment statistics - Admin only"""
+    """Get payment statistics - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin Operator access required'}), 403
         
         # Today's statistics
         today = datetime.now().date()
@@ -285,13 +285,13 @@ def get_statistics():
 @bp.route('/active', methods=['GET'])
 @jwt_required()
 def get_active_sessions():
-    """Get active parking sessions - Admin only"""
+    """Get active parking sessions - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+        if current_user.role not in ['admin', 'operator']:
+            return jsonify({'error': 'Admin Operator access required'}), 403
         
         active_payments = Payment.query.filter_by(status='unpaid').all()
         

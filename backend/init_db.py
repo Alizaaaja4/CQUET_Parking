@@ -14,9 +14,7 @@ from app.db.models import db, User, Slot, Payment
 def init_database():
     """Initialize database with tables and default data"""
     app = create_app()
-    
     with app.app_context():
-        # Create all tables
         db.create_all()
         
         # Create default admin user
@@ -42,6 +40,9 @@ def init_database():
             operator_user.set_password('operator123')
             db.session.add(operator_user)
             print("Created default operator user: operator/operator123")
+        
+        # Commit user ke database dulu
+        db.session.commit()
 
         # Create sample parking slots
         level_zone_slots = {
@@ -63,8 +64,7 @@ def init_database():
                             status=True  
                         )
                         db.session.add(slot)
-            
-            db.session.commit()
+        db.session.commit()
 
 if __name__ == '__main__':
     init_database()
