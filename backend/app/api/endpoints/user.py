@@ -77,6 +77,71 @@ def create_users():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@bp.route('/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_users(id):
+    """Update user - Admin only"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+
+        if current_user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
+        user = User.query.get(id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        role = data.get('role')
+        password = data.get('password')
+
+        if username:
+            if User.query.filter(User.username == username, User.id != id).first():
+                return jsonify({'error': 'Username already taken'}), 400
+            user.username = username
+        if email:
+            if User.query.filter(User.email == email, User.id != id).first():
+                return jsonify({'error': 'Email already taken'}), 400
+            user.email = email
+        if role:
+            user.role = role
+        if password:
+            user.set_password(password)
+
+        db.session.commit()
+        return jsonify({'message': 'User updated', 'user': user.to_dict()}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_user(id):
+    """Delete user - Admin only"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+
+        if current_user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
+        user = User.query.get(id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'message': 'User deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/profile', methods=['GET'])
 @jwt_required()
 def get_profile():
