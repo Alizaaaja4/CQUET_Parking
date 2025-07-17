@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.db.models import db, Slot, User
+from app.db.models import db, Slot, User # Assuming Slot and User models are defined here
 from sqlalchemy import func
 
 bp = Blueprint('slot', __name__)
@@ -9,11 +9,10 @@ bp = Blueprint('slot', __name__)
 def get_available_slots():
     """Get available slots for parking navigation"""
     try:
-        # Get query parameters
         level = request.args.get('level')
         zone = request.args.get('zone')
         
-        query = Slot.query.filter_by(status=True)  # available slots
+        query = Slot.query.filter_by(status=True)  # available slots (boolean True)
         
         if level:
             query = query.filter_by(level=level)
@@ -22,7 +21,6 @@ def get_available_slots():
         
         slots = query.all()
         
-        # Group by level and zone for better navigation
         grouped_slots = {}
         for slot in slots:
             level_key = slot.level
@@ -47,7 +45,6 @@ def get_available_slots():
 def recommend_slot():
     """Recommend closest available slot"""
     try:
-        # Get the first available slot (can be enhanced with proximity logic)
         slot = Slot.query.filter_by(status=True).first()
         
         if not slot:
@@ -80,10 +77,11 @@ def occupy_slot():
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404
         
-        if not slot.status:
+        # Check if slot.status is already False (occupied)
+        if not slot.status: # This correctly checks the boolean status
             return jsonify({'error': 'Slot already occupied'}), 400
         
-        slot.status = False  # Mark as occupied
+        slot.status = False  # Mark as occupied (boolean False)
         db.session.commit()
         
         return jsonify({
@@ -110,7 +108,7 @@ def release_slot():
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404
         
-        slot.status = True  # Mark as available
+        slot.status = True  # Mark as available (boolean True)
         db.session.commit()
         
         return jsonify({
@@ -136,17 +134,17 @@ def get_all_slots():
         
         slots = Slot.query.all()
         
-        # Statistics
         total_slots = len(slots)
-        available_slots = len([s for s in slots if s.status])
-        occupied_slots = total_slots - available_slots
+        # Filter based on boolean status from DB, then convert to frontend string for to_dict()
+        available_slots_count = len([s for s in slots if s.status is True])
+        occupied_slots_count = total_slots - available_slots_count
         
         return jsonify({
             'slots': [slot.to_dict() for slot in slots],
             'statistics': {
                 'total': total_slots,
-                'available': available_slots,
-                'occupied': occupied_slots
+                'available': available_slots_count,
+                'occupied': occupied_slots_count
             }
         }), 200
         
@@ -172,7 +170,6 @@ def create_slot():
         if not slot_id or not level or not zone:
             return jsonify({'error': 'slot_id, level, and zone required'}), 400
         
-        # Check if slot already exists
         if Slot.query.filter_by(slot_id=slot_id).first():
             return jsonify({'error': 'Slot ID already exists'}), 400
         
@@ -180,7 +177,7 @@ def create_slot():
             slot_id=slot_id,
             level=level,
             zone=zone,
-            status=True
+            status=True # New slots are always available (boolean True)
         )
         
         db.session.add(slot)
@@ -195,9 +192,9 @@ def create_slot():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@bp.route('/<int:slot_id>', methods=['PUT'])
+@bp.route('/<int:slot_id_db>', methods=['PUT']) # Changed parameter name to avoid confusion with slot_id string
 @jwt_required()
-def update_slot(slot_id):
+def update_slot(slot_id_db): # Use slot_id_db to refer to the database ID
     """Update slot - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
@@ -206,7 +203,8 @@ def update_slot(slot_id):
         if current_user.role not in ['admin', 'operator']:
             return jsonify({'error': 'Admin & Operator access required'}), 403
         
-        slot = Slot.query.get(slot_id)
+        # Use slot_id_db (the integer primary key) to find the slot
+        slot = Slot.query.get(slot_id_db) 
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404
         
@@ -218,8 +216,18 @@ def update_slot(slot_id):
             slot.level = data['level']
         if 'zone' in data:
             slot.zone = data['zone']
+        
+        # 🔥 CRITICAL FIX: Convert incoming string status to boolean
         if 'status' in data:
-            slot.status = data['status']
+            incoming_status = data['status']
+            if incoming_status == 'available':
+                slot.status = True
+            elif incoming_status == 'occupied':
+                slot.status = False
+            elif incoming_status == 'maintenance': # Assuming 'maintenance' also means not available for parking
+                slot.status = False # Or handle 'maintenance' as a separate column if needed
+            else:
+                return jsonify({'error': 'Invalid status value provided'}), 400
         
         db.session.commit()
         
@@ -232,9 +240,9 @@ def update_slot(slot_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@bp.route('/<int:slot_id>', methods=['DELETE'])
+@bp.route('/<int:slot_id_db>', methods=['DELETE']) # Changed parameter name
 @jwt_required()
-def delete_slot(slot_id):
+def delete_slot(slot_id_db): # Use slot_id_db to refer to the database ID
     """Delete slot - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
@@ -243,7 +251,8 @@ def delete_slot(slot_id):
         if current_user.role not in ['admin', 'operator']:
             return jsonify({'error': 'Admin & Operator access required'}), 403
         
-        slot = Slot.query.get(slot_id)
+        # Use slot_id_db (the integer primary key) to find the slot
+        slot = Slot.query.get(slot_id_db)
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404
         
@@ -255,3 +264,4 @@ def delete_slot(slot_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
