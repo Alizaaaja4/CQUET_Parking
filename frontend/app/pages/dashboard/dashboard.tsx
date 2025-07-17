@@ -1,19 +1,16 @@
-// PARK-IQ-CENTRAL-FE/app/routes/dashboard.tsx
 import React, { useEffect, useState } from "react";
 import {
   Layout,
   Menu,
-  theme,
   Typography,
   Button,
   Spin,
   message,
   Grid,
   Drawer,
-  Avatar, // <<<--- Already imported
-  Dropdown, // <<<--- Already imported
-  type MenuProps, // <<<--- Already imported
-  Space, // <<<--- IMPORT Space for aligning header items
+  Avatar,
+  Dropdown,
+  Space,
 } from "antd";
 import {
   DashboardOutlined,
@@ -22,40 +19,33 @@ import {
   UsergroupAddOutlined,
   LogoutOutlined,
   MenuOutlined,
-  UserOutlined, // <<<--- Already imported
+  UserOutlined,
 } from "@ant-design/icons";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
-import type { ItemType } from "antd/es/menu/interface";
-import type { MenuClickEventHandler } from "rc-menu/lib/interface";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
 const { useBreakpoint } = Grid;
 
 export function meta() {
-  return [{ title: "ParkIQ Central - Admin Dashboard" }];
+  return [{ title: "CarCheese - Admin Dashboard" }];
 }
 
 export default function DashboardLayout() {
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
   const navigate = useNavigate();
   const location = useLocation();
   const screens = useBreakpoint();
 
   const [userRole, setUserRole] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [username, setUsername] = useState<string>('Admin'); // State for username, default to 'Admin'
+  const [username, setUsername] = useState<string>("Admin");
 
   useEffect(() => {
     const storedRole = localStorage.getItem("userRole");
-    const storedUsername = localStorage.getItem('username'); // Assuming you store username on login
+    const storedUsername = localStorage.getItem("username");
     if (storedRole) {
       setUserRole(storedRole);
-      if (storedUsername) {
-        setUsername(storedUsername); // Set username if available
-      }
+      if (storedUsername) setUsername(storedUsername);
     } else {
       message.warning("Please log in to access the dashboard.");
       navigate("/login");
@@ -65,51 +55,46 @@ export default function DashboardLayout() {
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     localStorage.removeItem("userRole");
-    localStorage.removeItem("username"); // Clear username on logout
+    localStorage.removeItem("username");
     message.success("Logged out successfully!");
     navigate("/login");
   };
 
-  const getMenuItems = (role: string | null): ItemType[] => {
-    const items: ItemType[] = [
-      {
-        key: "/dashboard",
-        icon: <DashboardOutlined />,
-        label: <Link to="/dashboard">Monitoring</Link>,
-      },
-      {
-        key: "/dashboard/payments",
-        icon: <DollarOutlined />,
-        label: <Link to="/dashboard/payments">Payment History</Link>,
-      },
-    ];
+  // Menu
+  const menuItems = [
+    {
+      key: "/dashboard",
+      icon: <DashboardOutlined />,
+      label: <Link to="/dashboard">Monitoring</Link>,
+    },
+    {
+      key: "/dashboard/payments",
+      icon: <DollarOutlined />,
+      label: <Link to="/dashboard/payments">Payment History</Link>,
+    },
+    ...(userRole === "admin"
+      ? [
+          {
+            key: "/dashboard/slot-management",
+            icon: <CarOutlined />,
+            label: <Link to="/dashboard/slot-management">Slot Management</Link>,
+          },
+          {
+            key: "/dashboard/accounts",
+            icon: <UsergroupAddOutlined />,
+            label: <Link to="/dashboard/accounts">Admin Accounts</Link>,
+          },
+        ]
+      : []),
+  ];
 
-    if (role === "admin") {
-      items.push(
-        {
-          key: "/dashboard/slot-management",
-          icon: <CarOutlined />,
-          label: <Link to="/dashboard/slot-management">Slot Management</Link>,
-        },
-        {
-          key: "/dashboard/accounts",
-          icon: <UsergroupAddOutlined />,
-          label: <Link to="/dashboard/accounts">Admin Accounts</Link>,
-        }
-      );
-    }
-    return items;
-  };
-
-  const menuItems = getMenuItems(userRole);
-
-  const getDefaultSelectedKey = (): string => {
+  // Auto Highlight
+  const getDefaultSelectedKey = () => {
     const { pathname } = location;
     let bestMatchKey = "/dashboard";
     let longestMatchLength = 0;
-
     menuItems.forEach((item) => {
-      if (item && typeof item.key === "string") {
+      if (typeof item.key === "string") {
         if (pathname.startsWith(item.key) && item.key.length > longestMatchLength) {
           bestMatchKey = item.key;
           longestMatchLength = item.key.length;
@@ -119,55 +104,15 @@ export default function DashboardLayout() {
     return bestMatchKey;
   };
 
-  // --- NEW: Dropdown Menu Items for Avatar ---
-  const avatarMenuItems: MenuProps['items'] = [
+  const avatarMenuItems = [
     {
-      key: 'my-account-header', // Use a unique key for header
-      label: "My Account",
-      type: 'group', // Make it a group for header
-    },
-    {
-      type: 'divider',
-    },
-    {
-      key: 'profile',
-      label: 'Profile',
-      icon: <UserOutlined />, // Add an icon
-      onClick: () => {
-        message.info('Profile clicked (not implemented yet).');
-        // navigate('/dashboard/profile'); // Example navigation
-      },
-    },
-    {
-      key: 'settings',
-      label: 'Settings',
-      icon: <DashboardOutlined />, // Example icon
-      onClick: () => {
-        message.info('Settings clicked (not implemented yet).');
-        // navigate('/dashboard/settings'); // Example navigation
-      },
-    },
-    {
-      type: 'divider',
-    },
-    {
-      key: 'logout',
-      label: 'Logout',
+      key: "logout",
+      label: "Logout",
       icon: <LogoutOutlined />,
-      danger: true, // Make logout button red
-      onClick: handleLogout, // <<<--- LINK LOGOUT FUNCTION HERE
+      danger: true,
+      onClick: handleLogout,
     },
   ];
-
-  // --- NEW: Handle Menu click for the Drawer ---
-  const handleDrawerMenuItemClick: MenuClickEventHandler = (e) => {
-    setDrawerVisible(false); // Close drawer on menu item click
-    if (typeof e.key === "string") {
-      navigate(e.key); // Navigate using the clicked key
-    } else {
-      console.warn("Menu item key is not a string:", e.key);
-    }
-  };
 
   if (!userRole) {
     return (
@@ -187,108 +132,170 @@ export default function DashboardLayout() {
   const isMobile = screens.md === false;
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      {/* --- DESKTOP SIDEBAR (Sider) --- */}
+    <Layout style={{ minHeight: "100vh", background: "#F8F9FC" }}>
+      {/* SIDEBAR */}
       {!isMobile && (
-        <Layout.Sider width={200} theme="dark">
+        <Layout.Sider
+          width={210}
+          theme="dark"
+          style={{
+            background: "#23272F",
+            borderRight: "2px solid #FFD60022",
+            boxShadow: "2px 0 12px #2222",
+            position: "relative",
+            zIndex: 10,
+            paddingTop: 0,
+            minHeight: "100vh",
+          }}
+        >
           <div
-            className="demo-logo-vertical"
             style={{
-              height: 32,
-              margin: 16,
-              background: "rgba(255, 255, 255, 0.2)",
-              borderRadius: 6,
+              padding: "38px 0 26px 0",
+              textAlign: "center",
+              borderBottom: "1.5px solid #FFD60033",
+              marginBottom: 8,
             }}
-          />
+          >
+            <div
+              style={{
+                fontWeight: 900,
+                fontSize: 24,
+                color: "#FFD600",
+                fontFamily: "Montserrat, sans-serif",
+                letterSpacing: 1.3,
+                textShadow: "0 1px 8px #FFD60016",
+                userSelect: "none",
+              }}
+            >
+              CarCheese
+            </div>
+          </div>
           <Menu
             theme="dark"
             mode="inline"
             selectedKeys={[getDefaultSelectedKey()]}
             items={menuItems}
+            style={{
+              background: "transparent",
+              border: "none",
+              fontWeight: 600,
+              fontSize: 16,
+              color: "#fff",
+            }}
           />
         </Layout.Sider>
       )}
 
-      {/* --- MOBILE DRAWER (Drawer) --- */}
+      {/* MOBILE DRAWER */}
       {isMobile && (
         <Drawer
-          title="Admin Menu"
-          placement="top"
+          title={<div style={{ fontWeight: 900, color: "#FFD600" }}>CarCheese</div>}
+          placement="left"
           closable={true}
           onClose={() => setDrawerVisible(false)}
           open={drawerVisible}
-          key="mobile-drawer"
-          height="auto"
-          styles={{
-            body: { padding: 0 },
-            header: { background: colorBgContainer, padding: "16px 24px" },
-          }}
+          bodyStyle={{ padding: 0, background: "#23272F" }}
+          headerStyle={{ background: "#23272F", color: "#FFD600" }}
         >
           <Menu
-            theme="light"
+            theme="dark"
             mode="inline"
             selectedKeys={[getDefaultSelectedKey()]}
             items={menuItems}
-            onClick={handleDrawerMenuItemClick}
+            onClick={() => setDrawerVisible(false)}
           />
         </Drawer>
       )}
 
       <Layout>
-        <Header style={{ paddingTop: 0, background: colorBgContainer }}>
+        {/* HEADER */}
+        <Header
+          style={{
+            background: "#fff",
+            padding: "0 30px",
+            borderBottom: "2px solid #FFE06633",
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            minHeight: 65,
+            display: "flex",
+            alignItems: "center",
+            boxShadow: "0 2px 10px #FFD60006",
+          }}
+        >
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
+              width: "100%",
               alignItems: "center",
-              padding: "0 24px",
+              justifyContent: "space-between",
             }}
           >
-            {isMobile && (
-              <Button
-                type="text"
-                icon={<MenuOutlined />}
-                onClick={() => setDrawerVisible(true)}
-                style={{ fontSize: "16px", width: 64, height: 64 }}
-              />
-            )}
-            <Title
-              level={4}
-              style={{
-                margin: 0,
-                marginLeft: isMobile && !drawerVisible ? 0 : 24,
-              }}
-            >
-              Dashboard
-            </Title>
-            {/* --- REPLACED LOGOUT BUTTON WITH DROPDOWN AVATAR --- */}
-            <Dropdown menu={{ items: avatarMenuItems }} trigger={['click']}>
-              <a onClick={(e) => e.preventDefault()}> {/* Use <a> for clickable trigger */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {isMobile && (
+                <Button
+                  type="text"
+                  icon={<MenuOutlined style={{ fontSize: 28, color: "#FFD600" }} />}
+                  onClick={() => setDrawerVisible(true)}
+                  style={{ marginRight: 8 }}
+                />
+              )}
+              {/* LOGO MOBIL + ADMIN DASHBOARD */}
+              <span style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontWeight: 900,
+                fontFamily: "Montserrat, sans-serif",
+                color: "#222",
+                fontSize: 22,
+                letterSpacing: 1.2,
+              }}>
+                <CarOutlined style={{ color: "#FFD600", fontSize: 26 }} />
+                Admin Dashboard
+              </span>
+            </div>
+            <Dropdown menu={{ items: avatarMenuItems }}>
+              <a onClick={e => e.preventDefault()}>
                 <Space size="small">
-                    <Avatar size="large" style={{ backgroundColor: '#fde3cf', color: '#f56a00' }} icon={<UserOutlined />} />
-                    {!isMobile && ( // Show username next to avatar only on desktop
-                        <Typography.Text strong>{username}</Typography.Text>
-                    )}
+                  <Avatar size="large" style={{
+                    backgroundColor: '#FFD600',
+                    color: '#23272F',
+                    fontWeight: 700,
+                    fontSize: 20,
+                  }} icon={<UserOutlined />} />
+                  {!isMobile && (
+                    <Typography.Text strong style={{ color: "#23272F" }}>{username}</Typography.Text>
+                  )}
                 </Space>
               </a>
             </Dropdown>
-            {/* Removed the old logout button */}
           </div>
         </Header>
-        <Content style={{ margin: "24px 16px 0" }}>
-          <div
-            style={{
-              padding: 24,
-              minHeight: 360,
-              background: colorBgContainer,
-              borderRadius: borderRadiusLG,
-            }}
-          >
-            <Outlet />
-          </div>
+        {/* MAIN CONTENT */}
+        <Content style={{
+          margin: isMobile ? "18px 0 0 0" : "30px 26px 0 26px",
+          padding: isMobile ? 12 : 24,
+          minHeight: 360,
+          background: "#fff",
+          borderRadius: 28,
+          boxShadow: "0 6px 36px #FFD60013, 0 2px 16px #bbb2",
+        }}>
+          <Outlet />
         </Content>
-        <Layout.Footer style={{ textAlign: "center" }}>
-          CarCheese ©{new Date().getFullYear()} Created by CarCheese Developer Team
+        {/* FOOTER */}
+        <Layout.Footer
+          style={{
+            textAlign: "center",
+            background: "#23272F",
+            color: "#FFD600",
+            borderTop: "1.6px solid #ffe06633",
+            fontWeight: 500,
+            letterSpacing: ".5px",
+            fontFamily: "Montserrat, sans-serif",
+          }}
+        >
+          CarCheese Admin Panel ©{new Date().getFullYear()} | Smart Parking System
         </Layout.Footer>
       </Layout>
     </Layout>
