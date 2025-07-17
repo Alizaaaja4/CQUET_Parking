@@ -1,34 +1,47 @@
 // PARK-IQ-CENTRAL-FE/app/routes/dashboard/management.tsx
-import React, { useEffect, useState } from 'react';
-import { Typography, Table, Button, Space, Modal, Form, Input, Select, Popconfirm, message, Spin, Alert, Tag } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { parkingService, type ParkingSlot, type GetAllParkingSlotsAdminResponse } from '../../api/parkingService';
+import React, { useEffect, useState } from "react";
+import {
+  Typography,
+  Table,
+  Button,
+  Space,
+  Modal,
+  Popconfirm,
+  message,
+  Spin,
+  Alert,
+  Tag,
+  Select,
+  Input,
+} from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  parkingService,
+  type ParkingSlot,
+  type GetAllParkingSlotsAdminResponse,
+} from "../../api/parkingService";
 
 const { Title } = Typography;
-const { Option } = Select;
+const { Option } = Select; // Keep Select and Option imports as they are still used
 
 export function meta() {
   return [{ title: "Dashboard - Slot Management" }];
 }
 
-// Ensure this interface matches the ParkingSlot interface in parkingService.ts
-// based on your Flask backend's Slot.to_dict()
-interface ParkingSlotDisplay extends Omit<ParkingSlot, 'created_at' | 'updated_at' | 'vehiclePlate' | 'entryTime'> {
-  // We're extending the base ParkingSlot to explicitly include fields for display
-  // and ensure types align with what the Ant Design Table expects.
-  // 'id' is the numeric DB ID
-  // 'slot_id' is the human-readable string ID
-  // 'level' is string (e.g., "L1")
-  // 'zone' is string (e.g., "A")
-  // 'status' is string literal ('available' | 'occupied' | 'maintenance')
+interface ParkingSlotDisplay
+  extends Omit<
+    ParkingSlot,
+    "created_at" | "updated_at" | "vehiclePlate" | "entryTime" | "type"
+  > {
+  key: string;
 }
 
-// Define the form values interface for clarity
-interface SlotFormValues {
-  slot_id: string; // For adding/editing the human-readable ID
-  level: string;   // e.g., "L1"
-  zone: string;    // e.g., "A"
-  status?: 'available' | 'occupied' | 'maintenance'; // Only for editing existing slots
+// Define the form state interface for clarity
+interface CustomSlotFormState {
+  slot_id: string;
+  level: string;
+  zone: string;
+  status: "available" | "occupied" | "maintenance";
 }
 
 export default function SlotManagementPage() {
@@ -36,22 +49,36 @@ export default function SlotManagementPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingSlot, setEditingSlot] = useState<ParkingSlotDisplay | null>(null);
-  const [form] = Form.useForm<SlotFormValues>(); // Use the specific form values interface
+  const [editingSlot, setEditingSlot] = useState<ParkingSlotDisplay | null>(
+    null
+  );
+  // Custom form state for manual handling
+  const [formState, setFormState] = useState<CustomSlotFormState>({
+    slot_id: "",
+    level: "",
+    zone: "",
+    status: "available", // Default status for new slots
+  });
+  const [formErrors, setFormErrors] = useState<{
+    [key: string]: string | undefined;
+  }>({});
 
   // Function to fetch all slots from the backend
   const fetchSlots = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response: GetAllParkingSlotsAdminResponse = await parkingService.getAllParkingSlotsAdmin();
-      // Map backend ParkingSlot to ParkingSlotDisplay if necessary,
-      // but if the interfaces are aligned, a direct cast might be fine.
-      // Ensure the 'key' for the Table (rowKey="id") is unique and present.
-      setSlots(response.slots.map(slot => ({ ...slot, key: slot.id.toString() }))); // Add key for Antd Table
+      const response: GetAllParkingSlotsAdminResponse =
+        await parkingService.getAllParkingSlotsAdmin();
+      setSlots(
+        response.slots.map((slot) => ({ ...slot, key: slot.id.toString() }))
+      );
     } catch (err: any) {
-      console.error('Error fetching parking slots:', err);
-      const errorMessage = err.response?.data?.error || err.message || "Failed to fetch parking slots.";
+      console.error("Error fetching parking slots:", err);
+      const errorMessage =
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to fetch parking slots.";
       setError(errorMessage);
       message.error(errorMessage);
     } finally {
@@ -61,48 +88,102 @@ export default function SlotManagementPage() {
 
   // Fetch slots on component mount
   useEffect(() => {
-    // A small delay to ensure localStorage is fully loaded after login redirect
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
     if (!token) {
       setError("Authentication token missing. Please log in.");
       setLoading(false);
       return;
     }
 
-    // Delay the initial fetch slightly to avoid race conditions with localStorage
     setTimeout(() => {
       fetchSlots();
-    }, 50); // Small delay
+    }, 50);
   }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormState((prevState) => ({ ...prevState, [name]: value }));
+    // Clear error for the field as user types/selects
+    setFormErrors((prevErrors) => ({ ...prevErrors, [name]: undefined }));
+  };
+
+  // Specific handler for Ant Design Select component
+  const handleSelectChange = (
+    value: "available" | "occupied" | "maintenance"
+  ) => {
+    setFormState((prevState) => ({ ...prevState, status: value }));
+    setFormErrors((prevErrors) => ({ ...prevErrors, status: undefined }));
+  };
+
+  const validateForm = (): boolean => {
+    const errors: { [key: string]: string | undefined } = {};
+
+    // Validate Slot ID
+    if (!formState.slot_id.trim()) {
+      errors.slot_id = "Slot ID is required!";
+    }
+    // Validate Level
+    if (!formState.level.trim()) {
+      errors.level = "Level is required!";
+    }
+    // Validate Zone
+    if (!formState.zone.trim()) {
+      errors.zone = "Zone is required!";
+    }
+    // Status is only required if editing an existing slot
+    if (editingSlot && !formState.status) {
+      errors.status = "Status is required!";
+    }
+
+    setFormErrors(errors);
+
+    // Log validation results for debugging
+    console.log("Validation Errors:", errors);
+    console.log("Is Form Valid:", Object.keys(errors).length === 0);
+
+    return Object.keys(errors).length === 0; // Return true if no errors
+  };
 
   const handleAdd = () => {
     setEditingSlot(null);
-    form.resetFields();
+    setFormState({
+      slot_id: "",
+      level: "",
+      zone: "",
+      status: "available", // Default status for new slots
+    });
+    setFormErrors({}); // Clear previous errors
     setIsModalVisible(true);
   };
 
   const handleEdit = (record: ParkingSlotDisplay) => {
     setEditingSlot(record);
-    // Set form fields based on the record, mapping 'id' to 'slot_id' for the form
-    form.setFieldsValue({
+    setFormState({
       slot_id: record.slot_id,
       level: record.level,
       zone: record.zone,
       status: record.status,
     });
+    setFormErrors({}); // Clear previous errors
     setIsModalVisible(true);
   };
 
-  const handleDelete = async (slotIdToDelete: number, slotIdentifier: string) => {
-    setLoading(true); // Show loading during delete operation
+  const handleDelete = async (
+    slotIdToDelete: number,
+    slotIdentifier: string
+  ) => {
+    setLoading(true);
     try {
-      // Call backend API to delete slot using the numeric 'id'
       await parkingService.deleteParkingSlotAdmin(slotIdToDelete);
       message.success(`Slot ${slotIdentifier} deleted successfully!`);
-      fetchSlots(); // Re-fetch data to update the table
+      fetchSlots();
     } catch (err: any) {
       console.error(`Error deleting slot ${slotIdentifier}:`, err);
-      const errorMessage = err.response?.data?.error || err.message || `Failed to delete slot ${slotIdentifier}.`;
+      const errorMessage =
+        err.response?.data?.error ||
+        err.message ||
+        `Failed to delete slot ${slotIdentifier}.`;
       message.error(errorMessage);
       setError(errorMessage);
     } finally {
@@ -111,37 +192,50 @@ export default function SlotManagementPage() {
   };
 
   const handleOk = async () => {
-    try {
-      const values = await form.validateFields();
-      setLoading(true); // Show loading during add/update operation
+    if (!validateForm()) {
+      message.error("Please fill in all required fields correctly.");
+      return;
+    }
 
+    console.log("Form state submitted:", formState);
+
+    setLoading(true);
+    try {
       if (editingSlot) {
-        // Update existing slot
-        // Backend update expects the numeric 'id' in the URL and a partial payload
         const payload: Partial<ParkingSlot> = {
-          slot_id: values.slot_id,
-          level: values.level,
-          zone: values.zone,
-          status: values.status, // Status is only available when editing
+          slot_id: formState.slot_id,
+          level: formState.level,
+          zone: formState.zone,
+          status: formState.status,
         };
         await parkingService.updateParkingSlotAdmin(editingSlot.id, payload);
-        message.success(`Slot ${values.slot_id} updated successfully!`);
+        message.success(`Slot ${formState.slot_id} updated successfully!`);
       } else {
-        // Add new slot
-        // Backend create expects slot_id, level, zone. Status defaults to available.
-        const payload: Omit<ParkingSlot, 'id' | 'status' | 'vehiclePlate' | 'entryTime' | 'created_at' | 'updated_at'> = {
-          slot_id: values.slot_id,
-          level: values.level,
-          zone: values.zone,
+        const payload: Omit<
+          ParkingSlot,
+          | "id"
+          | "status"
+          | "vehiclePlate"
+          | "entryTime"
+          | "created_at"
+          | "updated_at"
+          | "type"
+        > = {
+          slot_id: formState.slot_id,
+          level: formState.level,
+          zone: formState.zone,
         };
         await parkingService.createParkingSlotAdmin(payload);
-        message.success(`Slot ${values.slot_id} added successfully!`);
+        message.success(`Slot ${formState.slot_id} added successfully!`);
       }
       setIsModalVisible(false);
-      fetchSlots(); // Re-fetch data to update the table
-    } catch (info) {
-      console.log('Validate Failed or API Error:', info);
-      const errorMessage = (info as any).response?.data?.error || (info as any).message || "Operation failed.";
+      fetchSlots();
+    } catch (err) {
+      console.error("API Error:", err);
+      const errorMessage =
+        (err as any).response?.data?.error ||
+        (err as any).message ||
+        "Operation failed.";
       message.error(errorMessage);
       setError(errorMessage);
     } finally {
@@ -150,32 +244,44 @@ export default function SlotManagementPage() {
   };
 
   const columns = [
-    { title: 'Slot ID', dataIndex: 'slot_id', key: 'slot_id' }, // Use slot_id for display
-    { title: 'Level', dataIndex: 'level', key: 'level' },
-    { title: 'Zone', dataIndex: 'zone', key: 'zone' },
+    { title: "Slot ID", dataIndex: "slot_id", key: "slot_id" },
+    { title: "Level", dataIndex: "level", key: "level" },
+    { title: "Zone", dataIndex: "zone", key: "zone" },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: 'available' | 'occupied' | 'maintenance') => (
-        <Tag color={status === 'available' ? 'success' : status === 'occupied' ? 'error' : 'warning'}>
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status: "available" | "occupied" | "maintenance") => (
+        <Tag
+          color={
+            status === "available"
+              ? "success"
+              : status === "occupied"
+              ? "error"
+              : "warning"
+          }
+        >
           {status.toUpperCase()}
         </Tag>
       ),
     },
     {
-      title: 'Action',
-      key: 'action',
+      title: "Action",
+      key: "action",
       render: (_: any, record: ParkingSlotDisplay) => (
         <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
+          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            Edit
+          </Button>
           <Popconfirm
             title={`Are you sure to delete slot ${record.slot_id}?`}
-            onConfirm={() => handleDelete(record.id, record.slot_id)} // Pass both DB ID and human-readable ID
+            onConfirm={() => handleDelete(record.id, record.slot_id)}
             okText="Yes"
             cancelText="No"
           >
-            <Button icon={<DeleteOutlined />} danger>Delete</Button>
+            <Button icon={<DeleteOutlined />} danger>
+              Delete
+            </Button>
           </Popconfirm>
         </Space>
       ),
@@ -184,7 +290,7 @@ export default function SlotManagementPage() {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
+      <div style={{ textAlign: "center", padding: "50px" }}>
         <Spin size="large" tip="Loading slot data..." />
       </div>
     );
@@ -192,60 +298,143 @@ export default function SlotManagementPage() {
 
   if (error) {
     return (
-      <div style={{ padding: '20px' }}>
-        <Alert message="Error" description={error} type="error" showIcon />
+      <div style={{ padding: "20px" }}>
+        <Alert
+          message="Error"
+          description={error}
+          type="error"
+          showIcon
+          closable // Keeps the default 'x' close button
+          onClose={() => setError(null)} // Clear the error message on 'x' click, don't refresh
+        />
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <Button
+            size="small"
+            type="primary"
+            onClick={() => window.location.reload()}
+          >
+            OK
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <Title level={3}>Parking Slot Management</Title>
+    <Space direction="vertical" style={{ width: "100%" }} size="large">
+      <Title level={3}>Parking Slot Management</Title>{" "}
+      {/* Changed title back to original */}
       <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
         Add New Slot
       </Button>
-      <Table dataSource={slots} columns={columns} rowKey="id" /> {/* Use backend 'id' as rowKey */}
-
+      <Table dataSource={slots} columns={columns} rowKey="id" />
       <Modal
         title={editingSlot ? "Edit Parking Slot" : "Add New Parking Slot"}
-        visible={isModalVisible}
+        open={isModalVisible}
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
-        confirmLoading={loading} // Show loading on modal buttons during API calls
+        confirmLoading={loading}
       >
-        <Form form={form} layout="vertical">
-          <Form.Item
-            name="slot_id"
-            label="Slot ID (e.g., L1A01)"
-            rules={[{ required: true, message: 'Please input slot ID!' }]}
-          >
-            {/* Disable slot_id editing for existing slots */}
-            <Input disabled={!!editingSlot} />
-          </Form.Item>
-          <Form.Item
-            name="level"
-            label="Level (e.g., L1, L2)"
-            rules={[{ required: true, message: 'Please input level!' }]}
-          >
-            <Input /> {/* Changed type to text as levels are strings like "L1" */}
-          </Form.Item>
-          <Form.Item
-            name="zone"
-            label="Zone (e.g., A, B)"
-            rules={[{ required: true, message: 'Please input zone!' }]}
-          >
-            <Input />
-          </Form.Item>
-          {editingSlot && ( // Allow status change only for existing slots
-            <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Please select status!' }]}>
-              <Select>
+        {/* Custom form using HTML inputs and React state */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div>
+            <label
+              htmlFor="slot_id"
+              style={{ display: "block", marginBottom: "4px" }}
+            >
+              Slot ID (e.g., L1A01):
+            </label>
+            <Input
+              id="slot_id"
+              name="slot_id"
+              value={formState.slot_id}
+              onChange={handleInputChange}
+              disabled={!!editingSlot}
+              status={formErrors.slot_id ? "error" : ""}
+            />
+            {formErrors.slot_id && (
+              <div
+                style={{ color: "red", fontSize: "0.85em", marginTop: "4px" }}
+              >
+                {formErrors.slot_id}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="level"
+              style={{ display: "block", marginBottom: "4px" }}
+            >
+              Level (e.g., L1, L2):
+            </label>
+            <Input
+              id="level"
+              name="level"
+              value={formState.level}
+              onChange={handleInputChange}
+              status={formErrors.level ? "error" : ""}
+            />
+            {formErrors.level && (
+              <div
+                style={{ color: "red", fontSize: "0.85em", marginTop: "4px" }}
+              >
+                {formErrors.level}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="zone"
+              style={{ display: "block", marginBottom: "4px" }}
+            >
+              Zone (e.g., A, B):
+            </label>
+            <Input
+              id="zone"
+              name="zone"
+              value={formState.zone}
+              onChange={handleInputChange}
+              status={formErrors.zone ? "error" : ""}
+            />
+            {formErrors.zone && (
+              <div
+                style={{ color: "red", fontSize: "0.85em", marginTop: "4px" }}
+              >
+                {formErrors.zone}
+              </div>
+            )}
+          </div>
+
+          {editingSlot && (
+            <div>
+              <label
+                htmlFor="status"
+                style={{ display: "block", marginBottom: "4px" }}
+              >
+                Status:
+              </label>
+              <Select
+                id="status"
+                value={formState.status}
+                onChange={handleSelectChange} // Use the specific handler for Select
+                status={formErrors.status ? "error" : ""}
+              >
                 <Option value="available">Available</Option>
                 <Option value="occupied">Occupied</Option>
                 <Option value="maintenance">Maintenance</Option>
               </Select>
-            </Form.Item>
+              {formErrors.status && (
+                <div
+                  style={{ color: "red", fontSize: "0.85em", marginTop: "4px" }}
+                >
+                  {formErrors.status}
+                </div>
+              )}
+            </div>
           )}
-        </Form>
+        </div>
       </Modal>
     </Space>
   );
