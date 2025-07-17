@@ -1,60 +1,53 @@
 // PARK-IQ-CENTRAL-FE/app/api/paymentService.ts
-import axiosInstance from './axiosInstance'; // <<<--- IMPORT your custom axios instance
+import axiosInstance from './axiosInstance';
 
-// Define types based on your actual Payment API responses
-export interface PaymentRequest {
+/**
+ * Interface for a single payment record, aligning with common backend structures.
+ * Adjust types (e.g., string vs. Date for times, number vs. string for amount)
+ * if your backend's actual JSON response differs.
+ */
+export interface PaymentRecord {
+  id: number; // Assuming numeric ID from database
   vehiclePlate: string;
-  amount: number;
-  // Add any other details needed for initiating payment (e.g., duration, entryTime)
+  entryTime: string; // ISO 8601 string (e.g., "2025-07-10T10:00:00Z")
+  exitTime: string;  // ISO 8601 string
+  duration: string; // e.g., "2h 30m" - this might be calculated on backend or frontend
+  amount: number;   // Numeric amount
+  status: 'Completed' | 'Refunded' | 'Pending'; // String literals for status
+  // Add any other fields your backend might return for a payment record
+  slotId?: string; // Optional: Link to the slot
+  userId?: string; // Optional: Link to the user
 }
 
-export interface PaymentResponse {
-  transactionId: string;
-  qrCodeData: string; // The data string to generate QRIS QR code
-  status: 'pending' | 'completed' | 'failed';
-  amount: number;
-  // Add more payment gateway specific fields as needed
-}
-
-export interface PaymentHistoryRecord {
-  id: string;
-  transactionId: string;
-  vehiclePlate: string;
-  paymentMethod: string; // e.g., 'QRIS', 'Credit Card'
-  amount: number;
-  timestamp: string; // ISO string
-  status: 'Completed' | 'Refunded' | 'Pending';
-  // Add other relevant fields
+/**
+ * Interface for the response when fetching payment history.
+ * Assumes the backend returns an array of PaymentRecord directly.
+ * If your backend returns an object with 'records' and 'statistics', adjust this.
+ */
+export interface GetPaymentHistoryResponse {
+  payments: PaymentRecord[];
+  // You might also include total revenue or other stats from the backend here if available
+  totalRevenue?: number;
+  totalTransactions?: number;
 }
 
 export const paymentService = {
-  initiatePayment: async (data: PaymentRequest): Promise<PaymentResponse> => {
+  /**
+   * Fetches the payment history from the backend.
+   * Assumes the endpoint is /api/payments/history
+   * @returns Promise<GetPaymentHistoryResponse> An object containing payment records.
+   */
+  getPaymentHistory: async (): Promise<GetPaymentHistoryResponse> => {
     try {
-      const response = await axiosInstance.post<PaymentResponse>(`/payments/initiate`, data); // <<<--- Use axiosInstance
-      return response.data;
-    } catch (error) {
-      console.error('Error initiating payment:', error);
-      throw error;
-    }
-  },
-
-  checkPaymentStatus: async (transactionId: string): Promise<PaymentResponse> => {
-    try {
-      const response = await axiosInstance.get<PaymentResponse>(`/payments/${transactionId}/status`); // <<<--- Use axiosInstance
-      return response.data;
-    } catch (error) {
-      console.error(`Error checking payment status for ${transactionId}:`, error);
-      throw error;
-    }
-  },
-
-  getPaymentHistory: async (): Promise<PaymentHistoryRecord[]> => {
-    try {
-      const response = await axiosInstance.get<PaymentHistoryRecord[]>(`/payments`); // <<<--- Use axiosInstance
+      // Assuming your Flask backend has an endpoint like /api/payments/history
+      // If your backend endpoint is different, adjust the URL here.
+      const response = await axiosInstance.get<GetPaymentHistoryResponse>('/payments/history');
       return response.data;
     } catch (error) {
       console.error('Error fetching payment history:', error);
       throw error;
     }
   },
+
+  // You can add more payment-related API calls here (e.g., getPaymentDetails, processPayment, refundPayment)
 };

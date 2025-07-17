@@ -9,8 +9,8 @@ const { Title, Paragraph } = Typography;
 // Define metadata for this route (for the browser tab title)
 export function meta() {
   return [
-    { title: "ParkIQ Central - Welcome" },
-    { name: "description", content: "Discover the future of smart parking." },
+    { title: "CarCheese - Welcome" }, // Changed title to CarCheese
+    { name: "description", content: "Discover the future of smart parking with CarCheese." }, // Updated description
   ];
 }
 
@@ -33,10 +33,13 @@ export default function Welcome() {
     <div style={{
       minHeight: '100vh',
       display: 'flex',
+      flexDirection: 'column', // Changed to column to stack elements
       justifyContent: 'center',
       alignItems: 'center',
       background: 'linear-gradient(to right, #4facfe 0%, #00f2fe 100%)', // A nice gradient background
-      padding: '20px'
+      padding: '20px',
+      overflow: 'hidden', // Still hide overflow if content might exceed viewport
+      // Removed overscrollBehavior: 'none' from here, should be in global CSS if needed
     }}>
       <Card
         style={{
@@ -45,15 +48,17 @@ export default function Welcome() {
           borderRadius: '10px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           padding: '30px',
-          backgroundColor: 'white'
+          backgroundColor: 'white',
+          position: 'relative', // Keep relative for positioning if needed
+          zIndex: 1, // Ensure card is above any background elements
         }}
       >
-        <Title level={1} style={{ color: '#001529' }}>Welcome to ParkIQ Central!</Title>
+        <Title level={1} style={{ color: '#001529', marginBottom: '20px' }}>Welcome to CarCheese!</Title> {/* Renamed to CarCheese */}
         <Paragraph style={{ fontSize: '1.1em', color: '#595959', marginBottom: '30px' }}>
           Experience seamless parking with AI-powered object detection and OCR for automatic entry and exit.
           Real-time slot availability, accurate tariff calculation, and digital payments—all at your fingertips.
         </Paragraph>
-        <Space size="large">
+        <Space size="large" wrap> {/* Added wrap for better responsiveness */}
           <Button type="primary" size="large" onClick={handleExploreClick}>
             Get Started
           </Button>
@@ -61,7 +66,21 @@ export default function Welcome() {
             Learn More
           </Button>
         </Space>
+        {/* University Logos */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '30px', gap: '20px' }}>
+          <img
+            src="/chongqing.png" // Path relative to the public folder
+            alt="Chongqing University Logo"
+            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+          />
+          <img
+            src="/telu.png" // Path relative to the public folder
+            alt="Telkom University Logo"
+            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+          />
+        </div>
       </Card>
+      {/* Removed optional animated background elements as Framer Motion is removed */}
     </div>
   );
 }

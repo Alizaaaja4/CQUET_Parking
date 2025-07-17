@@ -7,51 +7,64 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // 🔥 This is critical if using cookies or `supports_credentials`
+  withCredentials: true,
 });
 
-// This is the request interceptor that adds the Authorization header
 axiosInstance.interceptors.request.use((config) => {
   const publicPaths = ['/users/login', '/users/register'];
-  const isPublic = publicPaths.some(path => config.url?.includes(path));
+  const requestUrl = config.url || '';
+
+  const isPublic = publicPaths.some(path => requestUrl.startsWith(path));
+
+  console.groupCollapsed(`Axios Request Interceptor: ${config.method?.toUpperCase()} ${requestUrl}`);
+  console.log('Is public path:', isPublic);
 
   if (!isPublic) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    } else {
-      console.warn('No auth token for protected route:', config.url);
+
+    // 🔥🔥 CRITICAL LOG HERE 🔥🔥
+    console.log('Token retrieved from localStorage by interceptor:', token);
+    if (!token) {
+        console.warn(`CRITICAL: No auth token found for protected route: ${requestUrl}. This request will likely fail with 401.`);
     }
 
-    config.headers['Cache-Control'] = 'no-cache'; // 👈 prevent caching
-  }
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+      console.log('Authorization header set.'); // Confirm header is being added
+    } else {
+      // If token is missing, consider explicitly aborting the request to prevent unnecessary 401s
+      // return Promise.reject(new axios.Cancel('Authentication token missing. Request aborted.'));
+    }
 
+    config.headers['Cache-Control'] = 'no-cache';
+  }
+  console.groupEnd();
   return config;
 }, (error) => Promise.reject(error));
 
 
-
-// Response Interceptor: Handle global errors and authentication redirects
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Check if the error is 401 (Unauthorized) or 403 (Forbidden)
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      console.error('Authentication/Authorization error:', error.response.status, error.response.data);
+    // --- NEW LOGS HERE ---
+    console.groupCollapsed(`Axios Response Interceptor: Error ${error.response?.status} for ${error.config?.url}`);
+    console.error('Authentication/Authorization error from API:', error.response?.status, error.response?.data);
+    // --- END NEW LOGS ---
 
-      // --- CRITICAL CHANGE HERE ---
-      // Check if the current path is NOT the login page
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
       const currentPath = window.location.pathname;
-      if (currentPath !== '/login') { // Only redirect if not already on login page
+      if (currentPath !== '/login') {
+        console.log('Redirecting to login due to 401/403...');
         localStorage.removeItem('authToken');
         localStorage.removeItem('userRole');
         localStorage.removeItem('username');
-        // window.location.href = '/login'; // Force full page reload and redirect
+        window.location.href = '/login';
+      } else {
+        console.log('Already on login page, not redirecting.');
       }
-      // Else: If we are already on the login page, just let the error propagate
-      // so that the specific login component can display its own error message (Alert/message.error)
     }
-    return Promise.reject(error); // Re-throw the error for component-specific handling
+    console.groupEnd(); // End the group
+    return Promise.reject(error);
   }
 );
 

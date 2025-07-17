@@ -8,7 +8,7 @@ import { userService, type AuthResponse } from "../../api/userService";
 const { Title, Text } = Typography;
 
 export function meta() {
-  return [{ title: "ParkIQ Central - Admin Login" }];
+  return [{ title: "CarCheese - Admin Login" }];
 }
 
 export default function LoginPage() {
@@ -18,41 +18,36 @@ export default function LoginPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const onFinish = async (values: any) => {
-    setLoading(true);
-    setLoginError(null);
-    try {
-      const apiResponse = await userService.login(values); // `apiResponse` is already the AuthResponse object
+  setLoading(true);
+  setLoginError(null);
+  try {
+    const apiResponse = await userService.login(values);
+    const { access_token, user } = apiResponse;
 
-      // --- FIX THIS LINE ---
-      const { access_token, user } = apiResponse; // <<<--- REMOVED .data
-      // ---------------------
+    if (!access_token || !user || !user.role || !user.username) {
+      console.error("Critical Error: Token or user data is undefined after login API call.");
+      message.error("Login successful but failed to get user data. Please contact support.");
+      setLoading(false);
+      return;
+    }
 
-      // --- DEBUGGING LOGS HERE (Adjust as needed after this fix) ---
-      // console.log('API Raw Response (apiResponse):', apiResponse); // This now IS the data
-      // console.log('API Response Data (apiResponse.data):', apiResponse.data); // This will now cause error
-      // console.log('Destructured access_token:', access_token);
-      // console.log('Destructured user object:', user);
-      // console.log('Destructured user.role:', user.role);
-      // console.log('Destructured user.username:', user.username);
-      // --- END DEBUGGING LOGS ---
+    // 🔥 Add console logs here to confirm what's being set
+    console.log("Login Success: Setting authToken:", access_token);
+    console.log("Login Success: Setting userRole:", user.role);
+    console.log("Login Success: Setting username:", user.username);
 
-      if (!access_token || !user || !user.role || !user.username) {
-        console.error(
-          "Critical Error: Token or user data is undefined after login API call."
-        );
-        message.error(
-          "Login successful but failed to get user data. Please contact support."
-        );
-        setLoading(false);
-        return;
-      }
+    localStorage.setItem("authToken", access_token);
+    localStorage.setItem("userRole", user.role);
+    localStorage.setItem("username", user.username);
 
-      message.success("Login successful! Redirecting to dashboard...");
-      localStorage.setItem("authToken", access_token);
-      localStorage.setItem("userRole", user.role);
-      localStorage.setItem("username", user.username);
+    // Immediately check if it's stored
+    const checkToken = localStorage.getItem("authToken");
+    console.log("Login Success: Token immediately after setting:", checkToken ? 'Present' : 'Missing');
 
-      navigate("/dashboard");
+
+    message.success("Login successful! Redirecting to dashboard...");
+    // Use window.location.href for a full refresh - highly recommended for initial login
+    window.location.href = "/dashboard";
     } catch (error: any) {
       console.error("Login failed (API error):", error);
       const errorMessage =
@@ -85,7 +80,7 @@ export default function LoginPage() {
           level={3}
           style={{ textAlign: "center", marginBottom: 24, color: "#001529" }}
         >
-          ParkIQ Central Admin Login
+          CarCheese Admin Login
         </Title>
         <Form
           name="admin_login"

@@ -288,7 +288,7 @@ export default function DashboardLayout() {
           </div>
         </Content>
         <Layout.Footer style={{ textAlign: "center" }}>
-          ParkIQ Central ©{new Date().getFullYear()} Created by Your Team
+          CarCheese ©{new Date().getFullYear()} Created by CarCheese Developer Team
         </Layout.Footer>
       </Layout>
     </Layout>

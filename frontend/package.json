@@ -13,6 +13,7 @@
     "@react-router/serve": "^7.5.3",
     "antd": "^5.26.4",
     "axios": "^1.10.0",
+    "framer-motion": "^12.23.5",
     "isbot": "^5.1.27",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
