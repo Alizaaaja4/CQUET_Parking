@@ -159,14 +159,17 @@ export const parkingService = {
      * @returns Promise<SlotOperationResponse> Confirmation and created slot details.
      */
     createParkingSlotAdmin: async (data: Omit<ParkingSlot, 'id' | 'status' | 'vehiclePlate' | 'entryTime'>): Promise<SlotOperationResponse> => {
-        try {
-            const response = await axiosInstance.post<SlotOperationResponse>('/slots/', data);
-            return response.data;
-        } catch (error) {
-            console.error('Error creating parking slot (admin):', error);
-            throw error;
-        }
-    },
+    try {
+      // The 'data' parameter already contains the required 'slot_id', 'level', 'zone'
+      // due to the Omit type, ensuring the correct input format for the backend.
+      // The URL '/slots/' resolves to http://localhost:8000/api/slots/ via the Vite proxy.
+      const response = await axiosInstance.post<SlotOperationResponse>('/slots/', data);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating parking slot (admin):', error);
+      throw error;
+    }
+  },
 
     /**
      * PUT Update Slot (Admin Only)

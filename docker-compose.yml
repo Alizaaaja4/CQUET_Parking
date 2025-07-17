@@ -1,4 +1,20 @@
 services:
+  frontend:
+    build: ./frontend
+    env_file:
+      - ./frontend/.env.template
+    ports:
+      - "5173:5173" # Host port 5173 maps to container port 3000 (Vite's default dev port)
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # <--- This is crucial for development to prevent host node_modules from overwriting
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:8000/ws
+    command: npm run dev # <--- THIS IS THE CRITICAL CHANGE
+
   backend:
     build: ./backend
     env_file:
@@ -32,31 +48,30 @@ services:
       - "80:80"
     depends_on:
       - backend
-      # - frontend -> ini nanti tinggal di uncomment aja
-
+      - frontend
+    volumes:
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf
   prometheus:
     image: prom/prometheus
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    depends_on: # Tambahkan ini agar Prometheus menunggu backend & node-exporter
+    depends_on:
       - backend
-      - node-exporter # Tambahkan ini
+      - node-exporter
 
   grafana:
     image: grafana/grafana
     ports:
-      - "3000:3000"
+      - "3000:3000" # Grafana remains on host port 3000
     volumes:
       - grafana_data:/var/lib/grafana
-    depends_on: # Tambahkan ini agar Grafana menunggu Prometheus
+    depends_on:
       - prometheus
 
-  # --- TAMBAHKAN SERVICE NODE EXPORTER INI ---
   node-exporter:
     image: prom/node-exporter
-    # HAPUS network_mode: "host"
     ports:
       - "9100:9100"
     volumes:
