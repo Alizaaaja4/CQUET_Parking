@@ -3,7 +3,7 @@ import PaymentPage from "~/pages/payment/payment";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "New React Router App" },
+    { title: "CarCheese App" },
     { name: "description", content: "Welcome to React Router!" },
   ];
 }
