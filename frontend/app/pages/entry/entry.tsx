@@ -1,6 +1,6 @@
-import React from 'react';
-import { Typography, Button, Card, Spin, Modal } from 'antd';
-import { CameraOutlined, CarOutlined, ScanOutlined, CheckCircleFilled } from '@ant-design/icons';
+import React, { useEffect, useState, useRef } from 'react';
+import { Typography, Button, Card, Spin, Modal, Space, message } from 'antd';
+import { CameraOutlined, CarOutlined, ScanOutlined, CheckCircleFilled, VideoCameraOutlined, StopOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
@@ -11,15 +11,23 @@ export function meta() {
 
 export default function EntryPage() {
   const navigate = useNavigate();
-  const [isDetecting, setIsDetecting] = React.useState(false);
-  const [detectedVehicle, setDetectedVehicle] = React.useState<{ type: string; plate: string } | null>(null);
-  const [plateReveal, setPlateReveal] = React.useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  // Define detectedVehicle with specific types for simulation to match zones
+  const [detectedVehicle, setDetectedVehicle] = useState<{ type: 'Bike' | 'Car' | 'Heavy'; plate: string } | null>(null);
+  const [plateReveal, setPlateReveal] = useState(false);
+  const [countdown, setCountdown] = useState(5); // New state for countdown
 
   // SPLASH STATE
-  const [showSplash, setShowSplash] = React.useState(true);
-  const [splashOut, setSplashOut] = React.useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashOut, setSplashOut] = useState(false);
 
-  React.useEffect(() => {
+  // Camera state and ref
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false); 
+  const mediaStreamRef = useRef<MediaStream | null>(null); // To hold the actual MediaStream object
+
+  // Splash screen effect
+  useEffect(() => {
     const outTimer = setTimeout(() => setSplashOut(true), 1800);
     const hideTimer = setTimeout(() => setShowSplash(false), 2600);
     return () => {
@@ -28,36 +36,125 @@ export default function EntryPage() {
     };
   }, []);
 
-  // Plate modal control
-  React.useEffect(() => {
-    let revealTimeout: any, navTimeout: any;
+  // Plate modal control and navigation effect
+  useEffect(() => {
+    let revealTimeout: any; 
     if (detectedVehicle) {
       setPlateReveal(false);
-      // Delay untuk animasi modal
+      setCountdown(5); // Reset countdown when a new vehicle is detected
       revealTimeout = setTimeout(() => setPlateReveal(true), 340);
-      navTimeout = setTimeout(() => {
-        setPlateReveal(false);
-        setDetectedVehicle(null);
-        navigate('/slot', {
-          state: {
-            entryTime: new Date().toISOString(),
-            vehicle: detectedVehicle,
-          }
-        });
-      }, 10000); // 10 detik
     }
     return () => {
       clearTimeout(revealTimeout);
-      clearTimeout(navTimeout);
     };
-  }, [detectedVehicle, navigate]);
+  }, [detectedVehicle, navigate, isCameraActive]);
+
+  // Countdown effect
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
+    if (detectedVehicle && plateReveal && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown(prevCount => prevCount - 1);
+      }, 1000);
+    } else if (countdown === 0 && detectedVehicle) {
+      // Automatically navigate when countdown reaches 0
+      setPlateReveal(false);
+      // setDetectedVehicle(null); // Keep detectedVehicle for navigation state
+      stopCamera(); // Stop camera before navigating away
+      navigate('/slot', {
+        state: {
+          entryTime: new Date().toISOString(),
+          vehicle: detectedVehicle, // Pass the entire detectedVehicle object
+        }
+      });
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [detectedVehicle, plateReveal, countdown, navigate]); // Dependencies for countdown logic
+
+  // Camera functions
+  const startCamera = async () => {
+    console.log('Attempting to start camera...');
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      console.log('Camera mediaStream obtained:', mediaStream);
+      
+      mediaStreamRef.current = mediaStream; // Store stream for cleanup
+
+      if (videoRef.current) { 
+        console.log('videoRef.current is valid, setting srcObject.');
+        videoRef.current.srcObject = mediaStream;
+        videoRef.current.load(); 
+        videoRef.current.play();
+        console.log('Video element srcObject set and play() called.');
+      } else {
+        console.warn('videoRef.current is unexpectedly null when trying to set srcObject.');
+        mediaStream.getTracks().forEach(track => track.stop()); // Stop stream if not used
+        return; 
+      }
+      setIsCameraActive(true);
+    } catch (err) {
+      console.error('Error accessing camera:', err);
+      message.error('Failed to access camera. Please check permissions and ensure no other app is using it.');
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    console.log('Attempting to stop camera...');
+    const mediaStream = mediaStreamRef.current; // Get stream from ref
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((track: MediaStreamTrack) => {
+        track.stop();
+        console.log('Camera track stopped:', track.kind);
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = null; // Clear the video source
+        console.log('Video element srcObject cleared.');
+      }
+      mediaStreamRef.current = null; // Clear the stored stream
+      setIsCameraActive(false);
+    } else {
+      console.log('No media stream found to stop.');
+    }
+  };
+
+  const toggleCamera = () => {
+    if (isCameraActive) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+  };
+
+  // Automatically start camera when component mounts and stop on unmount
+  useEffect(() => {
+    if (!showSplash) {
+      console.log('EntryPage mounted and splash hidden. Auto-starting camera...');
+      startCamera(); 
+    }
+
+    return () => {
+      console.log('EntryPage unmounting. Stopping camera...');
+      stopCamera(); 
+    };
+  }, [showSplash]);
 
   const simulateDetection = () => {
     setIsDetecting(true);
     setDetectedVehicle(null);
     setPlateReveal(false);
+    
+    // Define the possible vehicle types
+    const vehicleTypes: ('Bike' | 'Car' | 'Heavy')[] = ['Bike', 'Car', 'Heavy'];
+    // Randomly select one type
+    const randomType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
+    const randomPlate = `TEST-${Math.floor(Math.random() * 9000) + 1000}`; // Example random plate
+
     setTimeout(() => {
-      setDetectedVehicle({ type: 'Sedan', plate: 'B 1234 ABC' });
+      setDetectedVehicle({ type: randomType, plate: randomPlate });
       setIsDetecting(false);
     }, 2800);
   };
@@ -189,7 +286,8 @@ export default function EntryPage() {
             display: 'flex',
             flexDirection: 'column'
           }}
-          bodyStyle={{ padding: "20px 24px 0 24px" }}
+          // Update deprecated prop
+          styles={{ body: { padding: "20px 24px 0 24px" } }}
         >
           {/* Title + Subtitle */}
           <div style={{textAlign:'center', marginBottom:16}}>
@@ -223,11 +321,27 @@ export default function EntryPage() {
             borderRadius: 21,
             marginBottom: 18,
             border: "1.8px solid #ffe06666",
-            position: 'relative'
+            position: 'relative',
+            overflow: 'hidden' // Ensure video stays within rounded corners
           }}>
-            {isDetecting ? (
+            {/* The video element is now always present in the DOM, its display is controlled by CSS */}
+            <video
+              ref={videoRef}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: isCameraActive ? 'block' : 'none' // Control visibility with display property
+              }}
+              autoPlay
+              playsInline
+              muted
+              onLoadedMetadata={() => console.log('Video metadata loaded!')}
+            />
+            {!isCameraActive && isDetecting && ( // Show spin only if camera is not active but detecting
               <Spin size="large" tip="Detecting Vehicle..." style={{ color: "#FFD600" }} />
-            ) : (
+            )}
+            {!isCameraActive && !isDetecting && ( // Show illustration only if camera is off and not detecting
               <div style={{textAlign:'center', width:'100%'}}>
                 {/* Ilustrasi mobil + kamera */}
                 <svg width={150} height={100} viewBox="0 0 120 80" fill="none">
@@ -255,17 +369,41 @@ export default function EntryPage() {
               </div>
             )}
           </div>
-          {/* Detection Button */}
-          <div style={{
-            display:'flex', justifyContent:'center', marginBottom: 10
-          }}>
-            <Button 
-              type="primary" 
-              onClick={simulateDetection} 
-              loading={isDetecting}
+          {/* Action Buttons */}
+          <Space direction="vertical" style={{ width: '100%', display: 'flex', alignItems: 'center' }}>
+            <Button
+              type="primary"
+              icon={isCameraActive ? <StopOutlined /> : <VideoCameraOutlined />}
+              onClick={toggleCamera}
+              danger={isCameraActive}
               size="large"
               style={{
-                background: isDetecting 
+                background: isCameraActive
+                  ? '#ff4d4f' // Red for stop
+                  : 'linear-gradient(90deg,#FFD600 80%,#FFA726 100%)', // Yellow for start
+                color: isCameraActive ? '#fff' : '#222',
+                fontWeight: 700,
+                border: "none",
+                borderRadius: 25,
+                minWidth: 170,
+                minHeight: 44,
+                fontSize: 18,
+                boxShadow: "0 2px 16px #FFD60044",
+                transition: "all .17s cubic-bezier(.52,.12,.29,1.12)",
+                outline: "none",
+                marginBottom: 10
+              }}
+            >
+              {isCameraActive ? 'Stop Camera' : 'Start Camera'}
+            </Button>
+            <Button
+              type="primary"
+              onClick={simulateDetection}
+              loading={isDetecting}
+              size="large"
+              disabled={!isCameraActive} // Disable detection if camera is not active
+              style={{
+                background: isDetecting
                   ? 'linear-gradient(90deg,#FFD600 75%,#FFD600 100%)'
                   : 'linear-gradient(90deg,#FFD600 80%,#FFA726 100%)',
                 color: "#222",
@@ -277,12 +415,14 @@ export default function EntryPage() {
                 fontSize: 18,
                 boxShadow: "0 2px 16px #FFD60044",
                 transition: "all .17s cubic-bezier(.52,.12,.29,1.12)",
-                outline: "none"
+                outline: "none",
+                opacity: !isCameraActive ? 0.5 : 1, // Visually disable if camera is off
+                cursor: !isCameraActive ? 'not-allowed' : 'pointer'
               }}
             >
               {isDetecting ? <><ScanOutlined /> Detecting...</> : <><ScanOutlined /> Start Detection</>}
             </Button>
-          </div>
+          </Space>
           {/* Instructions */}
           <Paragraph style={{ marginTop: 12, fontSize:16, textAlign:'center' }}>
             <Text strong style={{color:'#FFD600'}}>Instructions:</Text> Please position your vehicle in front of the camera and ensure the license plate is visible.
@@ -301,16 +441,9 @@ export default function EntryPage() {
           padding:0,
           top: 30,
         }}
-        maskStyle={{
-          background: "rgba(255,214,0,0.12)"
-        }}
-        bodyStyle={{
-          padding: '32px 0 22px 0',
-          borderRadius: 20,
-          background: '#fff',
-          minHeight: 280,
-        }}
-        destroyOnClose
+        // Update deprecated prop
+        styles={{ mask: { background: "rgba(255,214,0,0.12)" }, body: { padding: '32px 0 22px 0', borderRadius: 20, background: '#fff', minHeight: 280 } }}
+        destroyOnClose // Keep this for now, but note it's deprecated
       >
         {/* Animasi */}
         <style>
@@ -408,7 +541,7 @@ export default function EntryPage() {
             marginTop:10,
             fontWeight:500
           }}>
-            Automatically continue in 10 seconds...
+            Automatically continue in {countdown} seconds...
           </div>
         </div>
       </Modal>

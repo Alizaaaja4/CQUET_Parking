@@ -22,7 +22,7 @@ import {
 } from "../../api/parkingService";
 
 const { Title } = Typography;
-const { Option } = Select; // Keep Select and Option imports as they are still used
+const { Option } = Select;
 
 export function meta() {
   return [{ title: "Dashboard - Slot Management" }];
@@ -40,7 +40,7 @@ interface ParkingSlotDisplay
 interface CustomSlotFormState {
   slot_id: string;
   level: string;
-  zone: string;
+  zone: 'A' | 'B' | 'C'; // 🔥 CORRECTED: Zone is now explicitly 'A', 'B', or 'C'
   status: "available" | "occupied" | "maintenance";
 }
 
@@ -56,7 +56,7 @@ export default function SlotManagementPage() {
   const [formState, setFormState] = useState<CustomSlotFormState>({
     slot_id: "",
     level: "",
-    zone: "",
+    zone: "A", // Default zone for new slots (or first option in Select)
     status: "available", // Default status for new slots
   });
   const [formErrors, setFormErrors] = useState<{
@@ -104,45 +104,46 @@ export default function SlotManagementPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormState((prevState) => ({ ...prevState, [name]: value }));
-    // Clear error for the field as user types/selects
     setFormErrors((prevErrors) => ({ ...prevErrors, [name]: undefined }));
   };
 
-  // Specific handler for Ant Design Select component
-  const handleSelectChange = (
+  // Specific handler for Ant Design Select component (for Status)
+  const handleStatusSelectChange = (
     value: "available" | "occupied" | "maintenance"
   ) => {
     setFormState((prevState) => ({ ...prevState, status: value }));
     setFormErrors((prevErrors) => ({ ...prevErrors, status: undefined }));
   };
 
+  // Specific handler for Ant Design Select component (for Zone)
+  const handleZoneSelectChange = (value: 'A' | 'B' | 'C') => { // 🔥 NEW: Specific handler for Zone Select
+    setFormState(prevState => ({ ...prevState, zone: value }));
+    setFormErrors(prevErrors => ({ ...prevErrors, zone: undefined }));
+  };
+
   const validateForm = (): boolean => {
     const errors: { [key: string]: string | undefined } = {};
 
-    // Validate Slot ID
     if (!formState.slot_id.trim()) {
       errors.slot_id = "Slot ID is required!";
     }
-    // Validate Level
     if (!formState.level.trim()) {
       errors.level = "Level is required!";
     }
-    // Validate Zone
-    if (!formState.zone.trim()) {
-      errors.zone = "Zone is required!";
+    // 🔥 VALIDATION FOR ZONE: Ensure it's one of the valid options
+    if (!formState.zone || !['A', 'B', 'C'].includes(formState.zone)) {
+      errors.zone = "Zone must be A, B, or C!";
     }
-    // Status is only required if editing an existing slot
     if (editingSlot && !formState.status) {
       errors.status = "Status is required!";
     }
 
     setFormErrors(errors);
 
-    // Log validation results for debugging
     console.log("Validation Errors:", errors);
     console.log("Is Form Valid:", Object.keys(errors).length === 0);
 
-    return Object.keys(errors).length === 0; // Return true if no errors
+    return Object.keys(errors).length === 0;
   };
 
   const handleAdd = () => {
@@ -150,10 +151,10 @@ export default function SlotManagementPage() {
     setFormState({
       slot_id: "",
       level: "",
-      zone: "",
+      zone: "A", // Default zone for new slots
       status: "available", // Default status for new slots
     });
-    setFormErrors({}); // Clear previous errors
+    setFormErrors({});
     setIsModalVisible(true);
   };
 
@@ -162,10 +163,10 @@ export default function SlotManagementPage() {
     setFormState({
       slot_id: record.slot_id,
       level: record.level,
-      zone: record.zone,
+      zone: record.zone, // This should now be 'A', 'B', or 'C'
       status: record.status,
     });
-    setFormErrors({}); // Clear previous errors
+    setFormErrors({});
     setIsModalVisible(true);
   };
 
@@ -205,7 +206,7 @@ export default function SlotManagementPage() {
         const payload: Partial<ParkingSlot> = {
           slot_id: formState.slot_id,
           level: formState.level,
-          zone: formState.zone,
+          zone: formState.zone, // Correctly typed as 'A' | 'B' | 'C'
           status: formState.status,
         };
         await parkingService.updateParkingSlotAdmin(editingSlot.id, payload);
@@ -223,7 +224,7 @@ export default function SlotManagementPage() {
         > = {
           slot_id: formState.slot_id,
           level: formState.level,
-          zone: formState.zone,
+          zone: formState.zone, // Correctly typed as 'A' | 'B' | 'C'
         };
         await parkingService.createParkingSlotAdmin(payload);
         message.success(`Slot ${formState.slot_id} added successfully!`);
@@ -304,18 +305,14 @@ export default function SlotManagementPage() {
           description={error}
           type="error"
           showIcon
-          closable // Keeps the default 'x' close button
-          onClose={() => setError(null)} // Clear the error message on 'x' click, don't refresh
+          closable
+          onClose={() => setError(null)}
+          action={
+            <Button size="small" type="primary" onClick={() => window.location.reload()}>
+              OK
+            </Button>
+          }
         />
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <Button
-            size="small"
-            type="primary"
-            onClick={() => window.location.reload()}
-          >
-            OK
-          </Button>
-        </div>
       </div>
     );
   }
@@ -323,7 +320,6 @@ export default function SlotManagementPage() {
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="large">
       <Title level={3}>Parking Slot Management</Title>{" "}
-      {/* Changed title back to original */}
       <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
         Add New Slot
       </Button>
@@ -389,15 +385,18 @@ export default function SlotManagementPage() {
               htmlFor="zone"
               style={{ display: "block", marginBottom: "4px" }}
             >
-              Zone (e.g., A, B):
+              Zone (A, B, C): {/* Updated label */}
             </label>
-            <Input
+            <Select // 🔥 Changed Input to Select for Zone
               id="zone"
-              name="zone"
               value={formState.zone}
-              onChange={handleInputChange}
+              onChange={handleZoneSelectChange} // Use specific handler
               status={formErrors.zone ? "error" : ""}
-            />
+            >
+              <Option value="A">A</Option>
+              <Option value="B">B</Option>
+              <Option value="C">C</Option>
+            </Select>
             {formErrors.zone && (
               <div
                 style={{ color: "red", fontSize: "0.85em", marginTop: "4px" }}
@@ -418,7 +417,7 @@ export default function SlotManagementPage() {
               <Select
                 id="status"
                 value={formState.status}
-                onChange={handleSelectChange} // Use the specific handler for Select
+                onChange={handleStatusSelectChange} // Use the specific handler for Select
                 status={formErrors.status ? "error" : ""}
               >
                 <Option value="available">Available</Option>

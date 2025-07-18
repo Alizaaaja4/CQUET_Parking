@@ -3,16 +3,16 @@ import axiosInstance from './axiosInstance';
 
 // Define specific response/payload types for clarity
 export interface SlotRecommendation {
-    recommended_slot: { // Changed to match backend key
-        slot_id: string; // Ensure this matches the actual slot identifier
+    recommended_slot: {
+        slot_id: string;
         level: string;
-        zone: string; // Add zone as per your backend recommend_slot
-        status: boolean; // This particular endpoint returns boolean status, keep as is
-        id?: number; // Flask model usually has an integer ID
+        zone: 'A' | 'B' | 'C';
+        status: 'available' | 'occupied' | 'maintenance';
+        id: number;
     };
     navigation_info: {
         level: string;
-        zone: string;
+        zone: 'A' | 'B' | 'C';
         slot_id: string;
     };
 }
@@ -21,18 +21,17 @@ export interface ParkingSlot {
     id: number;
     slot_id: string;
     level: string;
-    type?: 'Car' | 'Motorcycle' | 'Both'; // Keep optional if not always present
-    status: 'available' | 'occupied' | 'maintenance'; // 🔥 CORRECTED: Based on your Postman response, this is a string
-    vehiclePlate?: string; // Optional, add if your backend sends it for occupied slots
-    entryTime?: string;   // Optional, add if your backend sends it for occupied slots
-    zone: string; // Mandatory from backend create_slot
+    status: 'available' | 'occupied' | 'maintenance';
+    vehiclePlate?: string;
+    entryTime?: string;
+    zone: 'A' | 'B' | 'C';
     created_at?: string;
     updated_at?: string;
 }
 
 export interface OccupyReleasePayload {
-    slot_id: string; // Changed to slot_id to match backend payload
-    vehiclePlate?: string; // Optional in occupy payload
+    slot_id: string;
+    vehiclePlate?: string;
     entryTime?: string;
     exitTime?: string;
     duration?: string;
@@ -57,7 +56,7 @@ export interface GetAllParkingSlotsAdminResponse {
 
 
 export const parkingService = {
-    // --- PUBLIC ENDPOINTS (Adjust paths if your backend differs from these assumptions) ---
+    // --- PUBLIC ENDPOINTS ---
 
     getAvailableParkingSlots: async (): Promise<any> => {
         try {
@@ -69,9 +68,22 @@ export const parkingService = {
         }
     },
 
-    getSlotRecommendation: async (): Promise<SlotRecommendation> => {
+    /**
+     * POST Slot Recommendation (Public) - Now accepts vehicle details in body
+     * Fetches a recommended available slot based on vehicle type.
+     * Endpoint: /api/slots/recommend
+     * @param vehicleType The type of vehicle ('Bike', 'Car', 'Heavy')
+     * @param vehiclePlate The license plate of the vehicle
+     * @returns Promise<SlotRecommendation> Object with recommended slot details.
+     */
+    getSlotRecommendation: async (vehicleType: 'Bike' | 'Car' | 'Heavy', vehiclePlate: string): Promise<SlotRecommendation> => {
         try {
-            const response = await axiosInstance.get<SlotRecommendation>('/slots/recommend');
+            const payload = {
+                vehicleType: vehicleType,
+                vehiclePlate: vehiclePlate,
+            };
+            // 🔥 Changed to POST request
+            const response = await axiosInstance.post<SlotRecommendation>('/slots/recommend', payload);
             return response.data;
         } catch (error) {
             console.error('Error fetching slot recommendation:', error);
@@ -79,9 +91,20 @@ export const parkingService = {
         }
     },
 
+    /**
+     * POST Occupy Slot (Public)
+     * Marks a slot as occupied when vehicle enters.
+     * Endpoint: /api/slots/occupy
+     * @param payload { slot_id, vehiclePlate, entryTime }
+     * @returns Promise<SlotOperationResponse> Confirmation of slot occupation.
+     */
     occupyParkingSlot: async (payload: OccupyReleasePayload): Promise<SlotOperationResponse> => {
         try {
-            const response = await axiosInstance.post<SlotOperationResponse>('/slots/occupy', { slot_id: payload.slot_id });
+            const response = await axiosInstance.post<SlotOperationResponse>('/slots/occupy', {
+                slot_id: payload.slot_id,
+                vehiclePlate: payload.vehiclePlate,
+                entryTime: payload.entryTime
+            });
             return response.data;
         } catch (error) {
             console.error('Error occupying parking slot:', error);
@@ -89,6 +112,13 @@ export const parkingService = {
         }
     },
 
+    /**
+     * POST Release Slot (Public)
+     * Marks a slot as available when vehicle exits.
+     * Endpoint: /api/slots/release
+     * @param payload { slot_id }
+     * @returns Promise<SlotOperationResponse> Confirmation of slot release.
+     */
     releaseParkingSlot: async (payload: OccupyReleasePayload): Promise<SlotOperationResponse> => {
         try {
             const response = await axiosInstance.post<SlotOperationResponse>('/slots/release', { slot_id: payload.slot_id });
@@ -111,10 +141,8 @@ export const parkingService = {
         }
     },
 
-    createParkingSlotAdmin: async (data: Omit<ParkingSlot, 'id' | 'status' | 'vehiclePlate' | 'entryTime' | 'created_at' | 'updated_at' | 'type'>): Promise<SlotOperationResponse> => {
+    createParkingSlotAdmin: async (data: Omit<ParkingSlot, 'id' | 'status' | 'vehiclePlate' | 'entryTime' | 'created_at' | 'updated_at'>): Promise<SlotOperationResponse> => {
       try {
-        // The 'data' parameter already contains the required 'slot_id', 'level', 'zone'
-        // due to the Omit type, ensuring the correct input format for the backend.
         const response = await axiosInstance.post<SlotOperationResponse>('/slots/', data);
         return response.data;
       } catch (error) {
