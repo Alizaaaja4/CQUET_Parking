@@ -11,10 +11,16 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.main import create_app
 from app.db.models import db, User, Slot, Payment
 
-def init_database():
+def init_database(drop_existing=False):
     """Initialize database with tables and default data"""
     app = create_app()
     with app.app_context():
+        if drop_existing:
+            print("Dropping existing tables...")
+            db.drop_all()
+        
+        # Create all tables (including new fields)
+        print("Creating tables...")
         db.create_all()
         
         # Create default admin user
@@ -41,14 +47,14 @@ def init_database():
             db.session.add(operator_user)
             print("Created default operator user: operator/operator123")
         
-        # Commit user ke database dulu
+        # Commit users to database first
         db.session.commit()
 
-        # Create sample parking slots
+        # Create sample parking slots with new fields
         level_zone_slots = {
-            'L1': {'A': 10},
-            'L2': {'B': 20},
-            'L3': {'C': 30}
+            'L1': {'A': 10},  # Bike zone
+            'L2': {'B': 20},  # Car zone
+            'L3': {'C': 30}   # Heavy vehicle zone
         }
 
         for level, zones in level_zone_slots.items():
@@ -61,10 +67,27 @@ def init_database():
                             slot_id=slot_id,
                             level=level,
                             zone=zone,
-                            status=True  
+                            status=True,  # Available
+                            vehicle_plate=None,  # No vehicle initially
+                            entry_time=None      # No entry time initially
                         )
                         db.session.add(slot)
+        
         db.session.commit()
+        print(f"Created sample parking slots")
+        
+        # Print summary
+        total_slots = Slot.query.count()
+        total_users = User.query.count()
+        print(f"\nDatabase initialized successfully!")
+        print(f"Total users: {total_users}")
+        print(f"Total slots: {total_slots}")
 
 if __name__ == '__main__':
-    init_database()
+    import argparse
+    parser = argparse.ArgumentParser(description='Initialize database')
+    parser.add_argument('--drop', action='store_true', 
+                       help='Drop existing tables before creating new ones')
+    args = parser.parse_args()
+    
+    init_database(drop_existing=args.drop)

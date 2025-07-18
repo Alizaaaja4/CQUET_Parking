@@ -42,6 +42,11 @@ class Slot(db.Model):
     level = db.Column(db.String(10), nullable=False)  # L1, L2, L3, 
     zone = db.Column(db.String(10), nullable=False)  # A, B, C
     status = db.Column(db.Boolean, default=True)  # True = available, False = occupied
+    
+    # Tambahkan field ini:
+    vehicle_plate = db.Column(db.String(20), nullable=True)  # Plat kendaraan yang parkir
+    entry_time = db.Column(db.DateTime, nullable=True)       # Waktu masuk
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -54,7 +59,8 @@ class Slot(db.Model):
             'level': self.level,
             'zone': self.zone,
             'status': 'available' if self.status else 'occupied',
-            'created_at': self.created_at.isoformat(),
+            'vehicle_plate': self.vehicle_plate,  
+            'entry_time': self.entry_time.isoformat() if self.entry_time else None,  
             'updated_at': self.updated_at.isoformat()
         }
 
