@@ -1,18 +1,26 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.db.models import db, Slot, User # Assuming Slot and User models are defined here
+from app.db.models import db, Slot, User
 from sqlalchemy import func
 
 bp = Blueprint('slot', __name__)
+
+# Define mapping for vehicle types to zones (Backend-side)
+vehicle_type_to_zone_map = {
+    'Bike': 'A',
+    'Car': 'B',
+    'Heavy': 'C',
+}
 
 @bp.route('/available', methods=['GET'])
 def get_available_slots():
     """Get available slots for parking navigation"""
     try:
+        # Get query parameters
         level = request.args.get('level')
         zone = request.args.get('zone')
         
-        query = Slot.query.filter_by(status=True)  # available slots (boolean True)
+        query = Slot.query.filter_by(status=True)  # available slots
         
         if level:
             query = query.filter_by(level=level)
@@ -41,15 +49,39 @@ def get_available_slots():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@bp.route('/recommend', methods=['GET'])
+@bp.route('/recommend', methods=['POST']) # 🔥 Changed to POST method
 def recommend_slot():
-    """Recommend closest available slot"""
+    """Recommend closest available slot based on vehicle type"""
     try:
-        slot = Slot.query.filter_by(status=True).first()
+        data = request.get_json()
+        vehicle_type = data.get('vehicleType') # Get vehicleType from request body
+        vehicle_plate = data.get('vehiclePlate') # Get vehiclePlate from request body
+
+        print(f"Backend: /recommend (POST) received request. vehicleType={vehicle_type}, vehiclePlate={vehicle_plate}") # NEW LOG
+
+        if not vehicle_type:
+            return jsonify({'error': 'Vehicle type is required for recommendation'}), 400
+
+        # Determine target zone based on vehicle type
+        target_zone = vehicle_type_to_zone_map.get(vehicle_type)
+        print(f"Backend: Determined target_zone: {target_zone} for vehicleType: {vehicle_type}") # NEW LOG
+
+        if not target_zone:
+            return jsonify({'error': f'No parking zone defined for vehicle type: {vehicle_type}'}), 400
+
+        # Query for an available slot in the target zone
+        query = Slot.query.filter_by(status=True, zone=target_zone)
+        print(f"Backend: Querying for available slot in zone: {target_zone}") # NEW LOG
+        
+        # You can add more complex logic here (e.g., order by level, then slot_id)
+        # For now, it gets the first available slot in that zone.
+        slot = query.first() 
         
         if not slot:
-            return jsonify({'error': 'No available slots'}), 404
+            print(f"Backend: No available slot found for zone: {target_zone}") # NEW LOG
+            return jsonify({'error': f'No available slots found for {vehicle_type} in Zone {target_zone}'}), 404
         
+        print(f"Backend: Recommended slot found: {slot.to_dict()}") # NEW LOG
         return jsonify({
             'recommended_slot': slot.to_dict(),
             'navigation_info': {
@@ -60,6 +92,7 @@ def recommend_slot():
         }), 200
         
     except Exception as e:
+        print(f"Backend Error in /recommend: {str(e)}") # NEW LOG
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/occupy', methods=['POST'])
@@ -68,6 +101,8 @@ def occupy_slot():
     try:
         data = request.get_json()
         slot_id = data.get('slot_id')
+        vehicle_plate = data.get('vehiclePlate') # Get vehiclePlate
+        entry_time = data.get('entryTime') # Get entryTime
         
         if not slot_id:
             return jsonify({'error': 'Slot ID required'}), 400
@@ -77,11 +112,12 @@ def occupy_slot():
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404
         
-        # Check if slot.status is already False (occupied)
-        if not slot.status: # This correctly checks the boolean status
+        if not slot.status:
             return jsonify({'error': 'Slot already occupied'}), 400
         
         slot.status = False  # Mark as occupied (boolean False)
+        slot.vehicle_plate = vehicle_plate # Store vehicle plate
+        slot.entry_time = entry_time # Store entry time
         db.session.commit()
         
         return jsonify({
@@ -109,6 +145,8 @@ def release_slot():
             return jsonify({'error': 'Slot not found'}), 404
         
         slot.status = True  # Mark as available (boolean True)
+        slot.vehicle_plate = None # Clear vehicle plate on release
+        slot.entry_time = None # Clear entry time on release
         db.session.commit()
         
         return jsonify({
@@ -135,7 +173,6 @@ def get_all_slots():
         slots = Slot.query.all()
         
         total_slots = len(slots)
-        # Filter based on boolean status from DB, then convert to frontend string for to_dict()
         available_slots_count = len([s for s in slots if s.status is True])
         occupied_slots_count = total_slots - available_slots_count
         
@@ -192,9 +229,9 @@ def create_slot():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@bp.route('/<int:slot_id_db>', methods=['PUT']) # Changed parameter name to avoid confusion with slot_id string
+@bp.route('/<int:slot_id_db>', methods=['PUT'])
 @jwt_required()
-def update_slot(slot_id_db): # Use slot_id_db to refer to the database ID
+def update_slot(slot_id_db):
     """Update slot - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
@@ -203,7 +240,6 @@ def update_slot(slot_id_db): # Use slot_id_db to refer to the database ID
         if current_user.role not in ['admin', 'operator']:
             return jsonify({'error': 'Admin & Operator access required'}), 403
         
-        # Use slot_id_db (the integer primary key) to find the slot
         slot = Slot.query.get(slot_id_db) 
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404
@@ -217,15 +253,14 @@ def update_slot(slot_id_db): # Use slot_id_db to refer to the database ID
         if 'zone' in data:
             slot.zone = data['zone']
         
-        # 🔥 CRITICAL FIX: Convert incoming string status to boolean
         if 'status' in data:
             incoming_status = data['status']
             if incoming_status == 'available':
                 slot.status = True
             elif incoming_status == 'occupied':
                 slot.status = False
-            elif incoming_status == 'maintenance': # Assuming 'maintenance' also means not available for parking
-                slot.status = False # Or handle 'maintenance' as a separate column if needed
+            elif incoming_status == 'maintenance': 
+                slot.status = False
             else:
                 return jsonify({'error': 'Invalid status value provided'}), 400
         
@@ -240,9 +275,9 @@ def update_slot(slot_id_db): # Use slot_id_db to refer to the database ID
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@bp.route('/<int:slot_id_db>', methods=['DELETE']) # Changed parameter name
+@bp.route('/<int:slot_id_db>', methods=['DELETE'])
 @jwt_required()
-def delete_slot(slot_id_db): # Use slot_id_db to refer to the database ID
+def delete_slot(slot_id_db):
     """Delete slot - Admin Operator only"""
     try:
         current_user_id = get_jwt_identity()
@@ -251,7 +286,6 @@ def delete_slot(slot_id_db): # Use slot_id_db to refer to the database ID
         if current_user.role not in ['admin', 'operator']:
             return jsonify({'error': 'Admin & Operator access required'}), 403
         
-        # Use slot_id_db (the integer primary key) to find the slot
         slot = Slot.query.get(slot_id_db)
         if not slot:
             return jsonify({'error': 'Slot not found'}), 404

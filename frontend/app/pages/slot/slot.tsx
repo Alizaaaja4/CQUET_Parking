@@ -1,43 +1,138 @@
-import React from 'react';
-import { Typography, Button } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Typography, Button, Spin, Alert } from 'antd'; // Import Spin and Alert
 import { CarOutlined, ClockCircleOutlined, EnvironmentOutlined } from '@ant-design/icons';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { parkingService, type SlotRecommendation, type OccupyReleasePayload } from '../../api/parkingService'; // Import parkingService and types
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 
 export function meta() {
   return [{ title: "CarCheese - Slot Assignment" }];
 }
 
-function findSlot() {
-  return {
-    slot: 'B2',
-    level: 2,
-    zone: 'B',
-  };
-}
+// Define mapping for vehicle types to zones
+const vehicleTypeToZoneMap: { [key: string]: 'A' | 'B' | 'C' } = {
+  'Bike': 'A',
+  'Car': 'B',
+  'Heavy': 'C',
+};
 
 export default function SlotPage() {
   const location = useLocation();
-  const { entryTime, vehicle } = location.state || {};
+  const navigate = useNavigate();
+  // Ensure vehicle type is correctly typed as it comes from EntryPage
+  const { entryTime, vehicle } = location.state as { entryTime: string; vehicle: { type: 'Bike' | 'Car' | 'Heavy'; plate: string } } || {};
 
-  const [showSplash, setShowSplash] = React.useState(true);
-  const [splashOut, setSplashOut] = React.useState(false);
-  const slotInfo = findSlot();
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashOut, setSplashOut] = useState(false);
+  const [countdown, setCountdown] = useState(10); // New state for countdown
 
-  // Responsive
-  const [isMobile, setIsMobile] = React.useState(false);
-  React.useEffect(() => {
-    setIsMobile(typeof window !== "undefined" && window.innerWidth < 700);
+  const [recommendedSlot, setRecommendedSlot] = useState<SlotRecommendation['recommended_slot'] | null>(null);
+  const [apiLoading, setApiLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  // Responsive state (kept for context, but not actively used for styling in this version)
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Splash screen effect
+  useEffect(() => {
+    setIsMobile(typeof window !== "undefined" && window.innerWidth < 700); // Only runs once
     const outTimer = setTimeout(() => setSplashOut(true), 3400);
     const hideTimer = setTimeout(() => setShowSplash(false), 4100);
+
     return () => {
       clearTimeout(outTimer);
       clearTimeout(hideTimer);
     };
   }, []);
 
-  // SPLASH
+  // Effect to fetch and occupy slot after splash screen is hidden
+  useEffect(() => {
+    if (!showSplash) { // Only run this effect once the splash screen is gone
+      const assignSlot = async () => {
+        setApiLoading(true);
+        setApiError(null);
+        
+        // 🔥 NEW LOGS: Confirming received vehicle data
+        console.log('SlotPage: Received vehicle data:', vehicle);
+        console.log('SlotPage: Received entry time:', entryTime);
+
+        if (!vehicle || !vehicle.type || !vehicle.plate || !entryTime) {
+          setApiError("Vehicle data or entry time missing. Cannot assign slot.");
+          setApiLoading(false);
+          return;
+        }
+
+        const targetZone = vehicleTypeToZoneMap[vehicle.type];
+        // 🔥 NEW LOG: Confirming target zone
+        console.log('SlotPage: Determined targetZone:', targetZone);
+
+        if (!targetZone) {
+          setApiError(`No zone defined for vehicle type: ${vehicle.type}.`);
+          setApiLoading(false);
+          return;
+        }
+
+        try {
+          // 1. Get Recommended Slot - 🔥 CORRECTED API CALL
+          console.log(`Searching for recommended slot for vehicle type: ${vehicle.type} in zone: ${targetZone}`);
+          const slotRecResponse = await parkingService.getSlotRecommendation(vehicle.type, vehicle.plate); // Pass vehicleType and vehiclePlate
+          // 🔥 NEW LOG: Inspecting raw API response for recommendation
+          console.log('SlotPage: Raw slot recommendation API response:', slotRecResponse);
+          const fetchedSlot = slotRecResponse.recommended_slot;
+
+          if (!fetchedSlot) {
+            setApiError(`No available slots found for ${vehicle.type} in Zone ${targetZone}.`);
+            setApiLoading(false);
+            return;
+          }
+          setRecommendedSlot(fetchedSlot);
+          // 🔥 NEW LOG: Confirming the zone of the fetched slot
+          console.log('SlotPage: Fetched slot ID:', fetchedSlot.slot_id, 'Zone:', fetchedSlot.zone);
+
+          // 2. Occupy the Recommended Slot
+          console.log(`Attempting to occupy slot ${fetchedSlot.slot_id} for plate ${vehicle.plate}`);
+          const occupyPayload: OccupyReleasePayload = {
+            slot_id: fetchedSlot.slot_id,
+            vehiclePlate: vehicle.plate,
+            entryTime: entryTime, // Pass entryTime received from EntryPage
+          };
+          await parkingService.occupyParkingSlot(occupyPayload);
+          console.log(`Slot ${fetchedSlot.slot_id} occupied successfully.`);
+
+        } catch (err: any) {
+          console.error('Error during slot assignment:', err);
+          const errorMessage = err.response?.data?.error || err.message || "Failed to assign parking slot.";
+          setApiError(errorMessage);
+        } finally {
+          setApiLoading(false);
+        }
+      };
+
+      assignSlot();
+    }
+  }, [showSplash, vehicle, entryTime]); // Dependencies: run when splash is hidden or vehicle/entryTime changes
+
+  // Countdown and auto-redirect effect
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
+
+    // Only start countdown if API loading is complete and a slot is recommended
+    if (!apiLoading && recommendedSlot && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown(prevCount => prevCount - 1);
+      }, 1000);
+    } else if (countdown === 0 && recommendedSlot) {
+      // When countdown reaches 0, navigate back to the entry page
+      navigate('/entry', { replace: true }); // Use replace: true to prevent going back to this page with browser back button
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [apiLoading, recommendedSlot, countdown, navigate]); // Dependencies for countdown logic
+
+  // SPLASH SCREEN
   if (showSplash) {
     return (
       <div style={{
@@ -95,7 +190,7 @@ export default function SlotPage() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: isMobile ? "0 2vw" : "0 4vw",
+      padding: "0 4vw", // Removed isMobile check for simplicity, adjust if needed
       overflow: "hidden",
       position: "relative"
     }}>
@@ -107,7 +202,7 @@ export default function SlotPage() {
         }} />
         <div style={{
           position: "absolute", right: -30, bottom: -30, width: 85, height: 85, borderRadius: 60,
-          background: "radial-gradient(circle at 53% 52%, #FFD600bb 73%, #fff0 100%)", filter: "blur(1.8px)", opacity: .13
+          background: "radial-gradient(circle at 53% 53%, #FFD600bb 73%, #fff0 100%)", filter: "blur(1.8px)", opacity: .13
         }} />
       </div>
 
@@ -123,7 +218,7 @@ export default function SlotPage() {
       <div style={{
         position: "fixed",
         left: 0,
-        bottom: isMobile ? 34 : 46,
+        bottom: 46, // Removed isMobile check
         width: "100vw",
         height: 70,
         pointerEvents: "none",
@@ -132,7 +227,7 @@ export default function SlotPage() {
       }}>
         <div style={{
           position: "absolute",
-          top: isMobile ? 10 : 16,
+          top: 16, // Removed isMobile check
           left: 0,
           width: 110,
           height: 40,
@@ -164,12 +259,12 @@ export default function SlotPage() {
         background: "rgba(255,255,255,0.95)",
         borderRadius: 28,
         boxShadow: "0 6px 36px #FFD60018, 0 2px 16px #bbb1",
-        padding: isMobile ? "24px 8px 30px 8px" : "46px 54px 44px 52px",
+        padding: "46px 54px 44px 52px", // Removed isMobile check
         display: "flex",
-        flexDirection: isMobile ? "column" : "row",
+        flexDirection: "row", // Removed isMobile check
         alignItems: "flex-start",
         justifyContent: "center",
-        gap: isMobile ? 34 : 72,
+        gap: 72, // Removed isMobile check
       }}>
         {/* LEFT: Info kendaraan */}
         <div style={{
@@ -177,12 +272,12 @@ export default function SlotPage() {
           minWidth: 260,
           display: "flex",
           flexDirection: "column",
-          alignItems: isMobile ? "center" : "flex-start",
+          alignItems: "flex-start", // Removed isMobile check
           justifyContent: "center"
         }}>
           <Title style={{
             color: "#222",
-            fontSize: isMobile ? "2.1rem" : "2.65rem",
+            fontSize: "2.65rem", // Removed isMobile check
             fontWeight: 900,
             marginBottom: 11,
             lineHeight: 1.13
@@ -191,7 +286,7 @@ export default function SlotPage() {
           </Title>
           <Paragraph style={{
             color: "#444",
-            fontSize: isMobile ? 15 : 17,
+            fontSize: 17, // Removed isMobile check
             maxWidth: 410,
             marginBottom: 20,
             lineHeight: 1.65
@@ -202,7 +297,7 @@ export default function SlotPage() {
           </Paragraph>
           <div style={{
             fontWeight: 700,
-            fontSize: isMobile ? 17 : 20,
+            fontSize: 20, // Removed isMobile check
             marginBottom: 10,
             color: "#b9a500",
             display: "flex", alignItems: "center", gap: 7,
@@ -215,7 +310,7 @@ export default function SlotPage() {
               fontWeight: 900,
               borderRadius: 9,
               padding: "2px 18px",
-              fontSize: isMobile ? 18 : 22,
+              fontSize: 22, // Removed isMobile check
               marginLeft: 13
             }}>
               {vehicle?.plate || "Plate"}
@@ -224,7 +319,7 @@ export default function SlotPage() {
           <div style={{
             color: "#444",
             fontWeight: 500,
-            fontSize: isMobile ? 15 : 17,
+            fontSize: 17, // Removed isMobile check
             marginBottom: 24,
             display: "flex", alignItems: "center"
           }}>
@@ -238,63 +333,102 @@ export default function SlotPage() {
         {/* RIGHT: Slot info + tombol */}
         <div style={{
           flex: 1,
-          minWidth: isMobile ? 210 : 300,
+          minWidth: 300, // Removed isMobile check
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-start"
         }}>
-          <div style={{
-            background: "#FFFDE7",
-            borderRadius: 18,
-            border: "1.7px solid #FFD600",
-            color: "#b9a500",
-            fontWeight: 800,
-            fontSize: isMobile ? 16 : 20,
-            padding: isMobile ? "16px 0 10px 0" : "22px 0 13px 0",
-            width: isMobile ? "99%" : 340,
-            marginBottom: 28,
-            textAlign: "center",
-            letterSpacing: 1,
-            boxShadow: "0 2px 14px #FFD60013"
-          }}>
-            <EnvironmentOutlined style={{ color: "#FFD600", fontSize: 22, marginRight: 8 }} />
-            <span style={{ color: "#FFD600", fontWeight: 900, fontSize: isMobile ? 19 : 21 }}>Level {slotInfo.level}</span>
-            &nbsp;|&nbsp;
-            <span style={{ color: "#FFD600", fontWeight: 800, fontSize: isMobile ? 18 : 20 }}>Zone {slotInfo.zone}</span>
-            <br />
-            <span style={{
-              color: "#222",
-              fontWeight: 900,
-              fontSize: isMobile ? 24 : 27,
-              display: "inline-block",
-              background: "#FFD600",
-              borderRadius: 13,
-              marginTop: 10,
-              padding: "7px 34px"
-            }}>
-              Slot {slotInfo.slot}
-            </span>
-          </div>
-          <Button
-            type="primary"
-            size="large"
-            style={{
-              background: "linear-gradient(90deg, #FFD600 78%, #FFA726 100%)",
-              color: "#222", fontWeight: 700, border: "none",
-              borderRadius: 22, padding: "0 38px", fontSize: 18,
-              boxShadow: "0 2px 16px #FFD60044", outline: "none"
-            }}
-            onClick={() => window.location.href = '/'}
-          >
-            Back to Home
-          </Button>
+          {/* Display loading, error, or recommended slot */}
+          {apiLoading ? (
+            <Spin size="large" tip="Assigning slot..." style={{ marginTop: 50 }} />
+          ) : apiError ? (
+            <Alert
+              message="Error"
+              description={apiError}
+              type="error"
+              showIcon
+              closable
+              onClose={() => setApiError(null)}
+              action={
+                <Button size="small" type="primary" onClick={() => navigate('/entry', { replace: true })}>
+                  Back to Entry
+                </Button>
+              }
+              style={{ width: '100%', marginBottom: 20 }}
+            />
+          ) : recommendedSlot ? (
+            <>
+              <div style={{
+                background: "#FFFDE7",
+                borderRadius: 18,
+                border: "1.7px solid #FFD600",
+                color: "#b9a500",
+                fontWeight: 800,
+                fontSize: 20, // Removed isMobile check
+                padding: "22px 0 13px 0", // Removed isMobile check
+                width: 340, // Removed isMobile check
+                marginBottom: 28,
+                textAlign: "center",
+                letterSpacing: 1,
+                boxShadow: "0 2px 14px #FFD60013"
+              }}>
+                <EnvironmentOutlined style={{ color: "#FFD600", fontSize: 22, marginRight: 8 }} />
+                <span style={{ color: "#FFD600", fontWeight: 900, fontSize: 21 }}>Level {recommendedSlot.level}</span>
+                &nbsp;|&nbsp;
+                <span style={{ color: "#FFD600", fontWeight: 800, fontSize: 20 }}>Zone {recommendedSlot.zone}</span>
+                <br />
+                <span style={{
+                  color: "#222",
+                  fontWeight: 900,
+                  borderRadius: 13,
+                  padding: "7px 34px",
+                  fontSize: 27, // Removed isMobile check
+                  display: "inline-block",
+                  background: "#FFD600",
+                  marginTop: 10,
+                }}>
+                  Slot {recommendedSlot.slot_id}
+                </span>
+              </div>
+              <Button
+                type="primary"
+                size="large"
+                style={{
+                  background: "linear-gradient(90deg, #FFD600 78%, #FFA726 100%)",
+                  color: "#222", fontWeight: 700, border: "none",
+                  borderRadius: 22, padding: "0 38px", fontSize: 18,
+                  boxShadow: "0 2px 16px #FFD60044", outline: "none"
+                }}
+                onClick={() => navigate('/entry', { replace: true })} // Use navigate for consistency
+              >
+                Back to Entry
+              </Button>
+              {/* Countdown text */}
+              <Paragraph style={{ marginTop: 20, fontSize: 15, color: '#888' }}>
+                Redirecting to entry page in {countdown} seconds...
+              </Paragraph>
+            </>
+          ) : (
+            <Alert
+              message="No Slot Found"
+              description={apiError || `Could not find an available slot for ${vehicle?.type} in the assigned zone.`}
+              type="info"
+              showIcon
+              action={
+                <Button size="small" type="primary" onClick={() => navigate('/entry', { replace: true })}>
+                  Back to Entry
+                </Button>
+              }
+              style={{ width: '100%', marginTop: 50 }}
+            />
+          )}
         </div>
       </div>
       {/* Bottom credit */}
       <div style={{
         textAlign: 'center',
-        marginTop: isMobile ? 18 : 38,
+        marginTop: 38, // Removed isMobile check
         color: '#bbb',
         fontSize: 13,
         width: '100%',
