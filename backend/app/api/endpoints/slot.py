@@ -175,13 +175,43 @@ def get_all_slots():
         total_slots = len(slots)
         available_slots_count = len([s for s in slots if s.status is True])
         occupied_slots_count = total_slots - available_slots_count
+  
+        occupied_slots = []
+        available_slots = []
+        
+        for slot in slots:
+            slot_data = slot.to_dict()
+            
+            if slot.status is False:  # Occupied
+                # Add zone and plate info for occupied slots
+                slot_data['zone'] = slot.zone
+                slot_data['vehicle_plate'] = slot.vehicle_plate
+                slot_data['entry_time'] = slot.entry_time.isoformat() if slot.entry_time else None
+                occupied_slots.append(slot_data)
+            else:  # Available
+                available_slots.append(slot_data)
+        
+        # Group occupied slots by zone for better visualization
+        occupied_by_zone = {}
+        for slot in occupied_slots:
+            zone = slot['zone']
+            if zone not in occupied_by_zone:
+                occupied_by_zone[zone] = []
+            occupied_by_zone[zone].append(slot)
         
         return jsonify({
             'slots': [slot.to_dict() for slot in slots],
+            'occupied_slots': occupied_slots,
+            'available_slots': available_slots,
+            'occupied_by_zone': occupied_by_zone,
             'statistics': {
                 'total': total_slots,
                 'available': available_slots_count,
-                'occupied': occupied_slots_count
+                'occupied': occupied_slots_count,
+                'occupied_by_zone': {
+                    zone: len(slots_in_zone) 
+                    for zone, slots_in_zone in occupied_by_zone.items()
+                }
             }
         }), 200
         
