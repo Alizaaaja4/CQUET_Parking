@@ -1,9 +1,10 @@
-# Python compiled files
-__pycache__/
+# Python bytecode
 *.pyc
-*.pyd
-*.pyo
-
-# Virtual environment
+__pycache__/
+.Python/
+build/
+dist/
+*.egg-info/
+.venv/
 venv/
-.env
+env/
